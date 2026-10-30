@@ -424,7 +424,15 @@ func (s *Service) startWatcher() {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s.watchStop = cancel
-	go procs.Watch(ctx, 2*time.Second, s.onProcStart)
+	onStart := procs.Dedup(s.onProcStart)
+	if err := procs.WatchETW(ctx, onStart); err != nil {
+		s.log.Warn("process starts: ETW unavailable, polling every 2s", "err", err)
+		go procs.Watch(ctx, 2*time.Second, onStart)
+		return
+	}
+	s.log.Info("process starts: ETW")
+	// safety net in case ETW drops events under load
+	go procs.Watch(ctx, 15*time.Second, onStart)
 }
 
 func (s *Service) stopWatcher() {
