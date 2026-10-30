@@ -182,10 +182,13 @@ func TestWireGuardEndToEnd(t *testing.T) {
 	if err != nil || spec.Kind != "endpoint" {
 		t.Fatalf("spec %v %v", spec.Kind, err)
 	}
+	spec.JSON["detour"] = "wg-direct"
 	clientCfg, _ := json.Marshal(map[string]any{
-		"log":       map[string]any{"level": "warn"},
-		"dns":       map[string]any{"servers": []any{map[string]any{"type": "local", "tag": "local"}}},
-		"outbounds": []any{map[string]any{"type": "direct", "tag": "direct"}},
+		"log": map[string]any{"level": "warn"},
+		"dns": map[string]any{"servers": []any{map[string]any{"type": "local", "tag": "local"}}},
+		// same shape as configgen output: endpoint detours via a non-empty direct outbound
+		"outbounds": []any{map[string]any{"type": "direct", "tag": "direct"},
+			map[string]any{"type": "direct", "tag": "wg-direct", "connect_timeout": "10s"}},
 		"endpoints": []any{spec.JSON},
 		"route":     map[string]any{"default_domain_resolver": "local"},
 	})

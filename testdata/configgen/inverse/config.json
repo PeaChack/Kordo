@@ -19,6 +19,7 @@
       "address": [
         "10.66.0.2/32"
       ],
+      "detour": "wg-direct",
       "mtu": 1408,
       "peers": [
         {
@@ -92,6 +93,11 @@
       },
       "type": "vless",
       "uuid": "bf000d23-0752-40b4-affe-68f7707a9661"
+    },
+    {
+      "connect_timeout": "10s",
+      "tag": "wg-direct",
+      "type": "direct"
     }
   ],
   "route": {

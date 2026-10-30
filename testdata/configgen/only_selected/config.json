@@ -20,6 +20,7 @@
       "address": [
         "10.66.0.2/32"
       ],
+      "detour": "wg-direct",
       "mtu": 1408,
       "peers": [
         {
@@ -95,6 +96,11 @@
       "server_port": 443,
       "tag": "srv-b2",
       "type": "shadowsocks"
+    },
+    {
+      "connect_timeout": "10s",
+      "tag": "wg-direct",
+      "type": "direct"
     }
   ],
   "route": {

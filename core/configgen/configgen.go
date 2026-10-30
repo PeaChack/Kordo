@@ -22,6 +22,7 @@ import (
 const (
 	TunTag      = "tun-in"
 	DirectTag   = "direct"
+	WGDirectTag = "wg-direct"
 	TunName     = "Portico"
 	TunAddr4    = "172.19.0.1/30"
 	TunAddr6    = "fdfe:dcba:9876::1/126"
@@ -118,6 +119,11 @@ func Generate(p model.Profile, servers []model.Server, env Env) (*Output, error)
 			return nil, fmt.Errorf("server %s: %w", s.Name, err)
 		}
 		if spec.Kind == "endpoint" {
+			// Without a detour, sing-box gives WireGuard a dual-stack bind that
+			// is pinned to the default interface; on adapters without IPv6 the
+			// IPv6 half fails and the whole bind dies after the TUN comes up.
+			// A detour switches it to a client bind that dials the peer over udp4.
+			spec.JSON["detour"] = WGDirectTag
 			endpoints = append(endpoints, spec.JSON)
 		} else {
 			outbounds = append(outbounds, spec.JSON)
@@ -329,6 +335,8 @@ func Generate(p model.Profile, servers []model.Server, env Env) (*Output, error)
 	}
 	if len(endpoints) > 0 {
 		cfg["endpoints"] = endpoints
+		// sing-box rejects a detour to an "empty" direct outbound, hence connect_timeout.
+		cfg["outbounds"] = append(outbounds, map[string]any{"type": "direct", "tag": WGDirectTag, "connect_timeout": "10s"})
 	}
 	exp := map[string]any{}
 	if env.ClashAPI != "" {
