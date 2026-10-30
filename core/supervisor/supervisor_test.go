@@ -53,7 +53,7 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	h := &harness{failTag: map[string]bool{}}
-	h.s = New(Config{HealthInterval: time.Hour, NetDebounce: 10 * time.Millisecond, BackoffMin: 20 * time.Millisecond, BackoffMax: 50 * time.Millisecond, MinDownTime: time.Nanosecond}, Hooks{
+	h.s = New(Config{HealthInterval: time.Hour, NetDebounce: 10 * time.Millisecond, BackoffMin: 20 * time.Millisecond, BackoffMax: 50 * time.Millisecond, MinDownTime: -1}, Hooks{
 		Build: func() (*configgen.Output, error) {
 			return &configgen.Output{
 				Config:       []byte{byte(h.cfgVer.Load())},
@@ -203,7 +203,7 @@ func TestDisconnect(t *testing.T) {
 
 func TestRecoversQuicklyWhileServerDown(t *testing.T) {
 	h := &harness{failTag: map[string]bool{"srv-s1": true}}
-	h.s = New(Config{HealthInterval: time.Hour, RecoveryInterval: 20 * time.Millisecond, NetDebounce: 10 * time.Millisecond, MinDownTime: time.Nanosecond}, Hooks{
+	h.s = New(Config{HealthInterval: time.Hour, RecoveryInterval: 20 * time.Millisecond, NetDebounce: 10 * time.Millisecond, MinDownTime: -1}, Hooks{
 		Build: func() (*configgen.Output, error) {
 			return &configgen.Output{Config: []byte{0}, RuleSets: map[string][]byte{}, OutboundTags: map[string]string{"s1": "srv-s1"}}, nil
 		},

@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
@@ -136,13 +137,22 @@ var etw struct {
 	cache   map[uint32]Proc // recently started processes, for parents that already exited
 }
 
+// Counters for diagnostics (tests print them when no event arrives).
+var etwStats struct {
+	events, starts, noProps, noPath, noParent, emitted atomic.Uint64
+	traceEnded                                         atomic.Bool
+	traceResult                                        atomic.Uint64 // ProcessTrace return code once it ended
+}
+
 var etwCallback = syscall.NewCallback(func(rec *etwEventRecord) uintptr {
-	if rec.ID != eventIDProcessStart || rec.ProviderID != kernelProcessGUID || rec.UserData == nil {
+	etwStats.events.Add(1)
+	if rec.ID != eventIDProcessStart || rec.ProviderID != kernelProcessGUID {
 		return 0
 	}
-	data := unsafe.Slice((*byte)(rec.UserData), int(rec.UserDataLength))
-	child, ok := parseProcessStart(data, rec.Version)
+	etwStats.starts.Add(1)
+	child, ok := readProcessStart(rec)
 	if !ok {
+		etwStats.noProps.Add(1)
 		return 0
 	}
 	etw.Lock()
@@ -158,49 +168,94 @@ var etwCallback = syscall.NewCallback(func(rec *etwEventRecord) uintptr {
 	etw.cache[child.PID] = child
 	etw.Unlock()
 	if cb == nil || child.Path == "" {
+		etwStats.noPath.Add(1)
 		return 0
 	}
 	// the parent is normally alive: ask it directly; fall back to what ETW saw
 	if path, created := ImagePath(child.PPID); path != "" {
 		parent = Proc{PID: child.PPID, Path: path, Created: created}
 	} else if !cached {
+		etwStats.noParent.Add(1)
 		return 0
 	}
 	if parent.Created != 0 && child.Created != 0 && parent.Created > child.Created {
+		etwStats.noParent.Add(1)
 		return 0 // PID reused by a newer process: not the real parent
 	}
+	etwStats.emitted.Add(1)
 	go cb(StartEvent{Child: child, Parent: parent})
 	return 0
 })
 
-// parseProcessStart reads the ProcessStart payload: ProcessID, CreateTime,
-// ParentProcessID, SessionID, [Flags (version >= 1)], ImageName (NT path).
-func parseProcessStart(d []byte, version uint8) (Proc, bool) {
-	off := 20
-	if version >= 1 {
-		off = 24
+// ProcessStart fields are read by name through TDH: the payload layout
+// differs between event versions (newer ones add sequence numbers and a
+// SID before ImageName).
+var (
+	tdh                    = windows.NewLazySystemDLL("tdh.dll")
+	procTdhGetPropertySize = tdh.NewProc("TdhGetPropertySize")
+	procTdhGetProperty     = tdh.NewProc("TdhGetProperty")
+	propProcessID          = utf16z("ProcessID")
+	propParentProcessID    = utf16z("ParentProcessID")
+	propCreateTime         = utf16z("CreateTime")
+	propSessionID          = utf16z("SessionID")
+	propImageName          = utf16z("ImageName")
+)
+
+func utf16z(s string) []uint16 {
+	u, _ := windows.UTF16FromString(s)
+	return u
+}
+
+// PROPERTY_DATA_DESCRIPTOR
+type propertyDataDescriptor struct {
+	PropertyName uint64
+	ArrayIndex   uint32
+	Reserved     uint32
+}
+
+func tdhProperty(rec *etwEventRecord, name []uint16) []byte {
+	desc := propertyDataDescriptor{PropertyName: uint64(uintptr(unsafe.Pointer(&name[0]))), ArrayIndex: 0xFFFFFFFF}
+	var size uint32
+	r, _, _ := procTdhGetPropertySize.Call(uintptr(unsafe.Pointer(rec)), 0, 0, 1, uintptr(unsafe.Pointer(&desc)), uintptr(unsafe.Pointer(&size)))
+	if r != 0 || size == 0 || size > 1<<16 {
+		return nil
 	}
-	if len(d) < off+2 {
+	buf := make([]byte, size)
+	r, _, _ = procTdhGetProperty.Call(uintptr(unsafe.Pointer(rec)), 0, 0, 1, uintptr(unsafe.Pointer(&desc)), uintptr(size), uintptr(unsafe.Pointer(&buf[0])))
+	if r != 0 {
+		return nil
+	}
+	return buf
+}
+
+func readProcessStart(rec *etwEventRecord) (Proc, bool) {
+	le := binary.LittleEndian
+	pid, ppid, ct := tdhProperty(rec, propProcessID), tdhProperty(rec, propParentProcessID), tdhProperty(rec, propCreateTime)
+	if len(pid) < 4 || len(ppid) < 4 {
 		return Proc{}, false
 	}
-	le := binary.LittleEndian
-	p := Proc{
-		PID:     le.Uint32(d[0:]),
-		Created: int64(le.Uint64(d[4:])),
-		PPID:    le.Uint32(d[12:]),
-		Session: le.Uint32(d[16:]),
+	p := Proc{PID: le.Uint32(pid), PPID: le.Uint32(ppid)}
+	if len(ct) >= 8 {
+		p.Created = int64(le.Uint64(ct))
 	}
-	var name []uint16
-	for i := off; i+1 < len(d); i += 2 {
-		c := le.Uint16(d[i:])
+	if sid := tdhProperty(rec, propSessionID); len(sid) >= 4 {
+		p.Session = le.Uint32(sid)
+	}
+	p.Path = utf16Bytes(tdhProperty(rec, propImageName))
+	p.Name = p.Path[strings.LastIndexAny(p.Path, `\/`)+1:]
+	return p, true
+}
+
+func utf16Bytes(b []byte) string {
+	u := make([]uint16, 0, len(b)/2)
+	for i := 0; i+1 < len(b); i += 2 {
+		c := binary.LittleEndian.Uint16(b[i:])
 		if c == 0 {
 			break
 		}
-		name = append(name, c)
+		u = append(u, c)
 	}
-	p.Path = windows.UTF16ToString(name)
-	p.Name = p.Path[strings.LastIndexAny(p.Path, `\/`)+1:]
-	return p, true
+	return windows.UTF16ToString(u)
 }
 
 // WatchETW starts a real-time ETW session for process starts and calls
@@ -274,7 +329,9 @@ func WatchETW(ctx context.Context, onStart func(StartEvent)) error {
 		// ProcessTrace blocks and calls etwCallback on this thread
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
-		procProcessTrace.Call(uintptr(unsafe.Pointer(&h)), 1, 0, 0)
+		r, _, _ := procProcessTrace.Call(uintptr(unsafe.Pointer(&h)), 1, 0, 0)
+		etwStats.traceResult.Store(uint64(r))
+		etwStats.traceEnded.Store(true)
 		close(done)
 	}()
 	go func() {

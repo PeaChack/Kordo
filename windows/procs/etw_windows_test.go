@@ -4,47 +4,15 @@ package procs
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"os/exec"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
-	"unicode/utf16"
 
 	"golang.org/x/sys/windows"
 )
-
-func startPayload(version uint8, image string) []byte {
-	le := binary.LittleEndian
-	b := make([]byte, 20)
-	le.PutUint32(b[0:], 1234)
-	le.PutUint64(b[4:], 0x01DB2A1B2C3D4E5F)
-	le.PutUint32(b[12:], 42)
-	le.PutUint32(b[16:], 1)
-	if version >= 1 {
-		b = append(b, 0, 0, 0, 0) // Flags
-	}
-	for _, c := range utf16.Encode([]rune(image)) {
-		b = le.AppendUint16(b, c)
-	}
-	b = append(b, 0, 0, 0xAA, 0xBB) // terminator + following fields
-	return b
-}
-
-func TestParseProcessStart(t *testing.T) {
-	const img = `\Device\HarddiskVolume3\Windows\System32\cmd.exe`
-	for _, v := range []uint8{0, 3} {
-		p, ok := parseProcessStart(startPayload(v, img), v)
-		if !ok || p.PID != 1234 || p.PPID != 42 || p.Session != 1 || p.Created != 0x01DB2A1B2C3D4E5F || p.Path != img || p.Name != "cmd.exe" {
-			t.Fatalf("version %d: %+v ok=%v", v, p, ok)
-		}
-	}
-	if _, ok := parseProcessStart([]byte{1, 2, 3}, 3); ok {
-		t.Fatal("short payload accepted")
-	}
-}
 
 func TestNTPaths(t *testing.T) {
 	n := newNTPaths()
@@ -108,7 +76,8 @@ func TestWatchETWSeesChild(t *testing.T) {
 			}
 			return
 		case <-deadline:
-			t.Fatal("no ETW event for the child process within 10s")
+			t.Fatalf("no ETW event for the child process within 10s; events=%d starts=%d noProps=%d noPath=%d noParent=%d emitted=%d traceEnded=%v traceResult=%d",
+				etwStats.events.Load(), etwStats.starts.Load(), etwStats.noProps.Load(), etwStats.noPath.Load(), etwStats.noParent.Load(), etwStats.emitted.Load(), etwStats.traceEnded.Load(), etwStats.traceResult.Load())
 		}
 	}
 }

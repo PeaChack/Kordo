@@ -87,7 +87,8 @@ type Config struct {
 	FailsToReset     int           // default 2: close the failing server's connections
 	// MinDownTime: a server counts as down only after failing for at least
 	// this long (default 10s), so a short blip (a network change, a lost
-	// probe) neither degrades the state nor closes connections.
+	// probe) neither degrades the state nor closes connections. Negative:
+	// no minimum (tests).
 	MinDownTime time.Duration
 	// FallbackHealthURL is probed when the server's own URL fails, so an
 	// outage of the probe site alone does not mark servers down.
