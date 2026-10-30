@@ -1,8 +1,14 @@
+c2sp.org/CCTV/age v0.0.0-20251208015420-e9274a7bdbfd h1:ZLsPO6WdZ5zatV4UfVpr7oAwLGRZ+sebTUruuM4Ra3M=
+c2sp.org/CCTV/age v0.0.0-20251208015420-e9274a7bdbfd/go.mod h1:SrHC2C7r5GkDk8R+NFVzYy/sdj0Ypg9htaPXQq5Cqeo=
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 code.pfad.fr/check v1.1.0 h1:GWvjdzhSEgHvEHe2uJujDcpmZoySKuHQNrZMfzfO0bE=
 code.pfad.fr/check v1.1.0/go.mod h1:NiUH13DtYsb7xp5wll0U4SXx7KhXQVCtRgdC96IPfoM=
+filippo.io/age v1.3.1 h1:hbzdQOJkuaMEpRCLSN1/C5DX74RPcNCk6oqhKMXmZi0=
+filippo.io/age v1.3.1/go.mod h1:EZorDTYUxt836i3zdori5IJX/v2Lj6kWFU0cfh6C0D4=
 filippo.io/edwards25519 v1.2.0 h1:crnVqOiS4jqYleHd9vaKZ+HKtHfllngJIiOpNpoJsjo=
 filippo.io/edwards25519 v1.2.0/go.mod h1:xzAOLCNug/yB62zG1bQ8uziwrIqIuxhctzJT18Q77mc=
+filippo.io/hpke v0.4.0 h1:p575VVQ6ted4pL+it6M00V/f2qTZITO0zgmdKCkd5+A=
+filippo.io/hpke v0.4.0/go.mod h1:EmAN849/P3qdeK+PCMkDpDm83vRHM5cDipBJ8xbQLVY=
 git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3 h1:N3IGoHHp9pb6mj1cbXbuaSXV/UMKwmbKLf53nQmtqMA=
 git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3/go.mod h1:QtOLZGz8olr4qH2vWK0QH0w0O4T9fEIjMuWpKUsH7nc=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
@@ -324,6 +330,8 @@ github.com/sagernet/fswatch v0.1.2 h1:/TT7k4mkce1qFPxamLO842WjqBgbTBiXP2mlUjp9PF
 github.com/sagernet/fswatch v0.1.2/go.mod h1:5BpGmpUQVd3Mc5r313HRpvADHRg3/rKn5QbwFteB880=
 github.com/sagernet/gliderssh v0.3.4-0.20261023092853-e0cad6d28647 h1:k4Yg+5FnI1CIYc25zxHJJ1A5JDr/VULxw0Bs5U7fpsY=
 github.com/sagernet/gliderssh v0.3.4-0.20261023092853-e0cad6d28647/go.mod h1:FmW0l0t/PzGIdJMr3iXOL+KuxvJTt6XAfF4GxbMlfZc=
+github.com/sagernet/gomobile v0.1.12 h1:XwzjZaclFF96deLqwAgK8gU3w0M2A8qxgDmhV+A0wjg=
+github.com/sagernet/gomobile v0.1.12/go.mod h1:A8l3FlHi2D/+mfcd4HHvk5DGFPW/ShFb9jHP5VmSiDY=
 github.com/sagernet/gvisor v0.0.0-20260727.0-sing-box-mod.1 h1:IdQ7yTKkB2wv8txwshxUroPlO4npOYAV71xb7xQ7Lys=
 github.com/sagernet/gvisor v0.0.0-20260727.0-sing-box-mod.1/go.mod h1:9O3SQskYuCfdHNvHEsWuEAgoyKEF74PiWp4NsNUia8g=
 github.com/sagernet/netlink v0.0.0-20260814022025-64455d367bbf h1:b/3rm+KvxzuYRcnMdLq/hmcqX6/2B8k24l6SDHL2Piw=
