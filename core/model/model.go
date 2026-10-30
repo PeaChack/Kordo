@@ -23,6 +23,10 @@ type Server struct {
 
 const DefaultHealthURL = "http://cp.cloudflare.com/generate_204"
 
+// FallbackHealthURL is tried when a server's probe URL fails, so that an
+// outage of one probe site does not mark every server down.
+const FallbackHealthURL = "http://www.gstatic.com/generate_204"
+
 func (s Server) EffectiveHealthURL() string {
 	if s.HealthURL != "" {
 		return s.HealthURL

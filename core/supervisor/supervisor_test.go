@@ -23,7 +23,7 @@ type fakeEngine struct {
 func (f *fakeEngine) URLTest(ctx context.Context, tag, link string) (time.Duration, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.fail[tag] {
+	if f.fail[tag] || f.fail[link] {
 		return 0, errors.New("timeout")
 	}
 	return 42 * time.Millisecond, nil
@@ -53,7 +53,7 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	h := &harness{failTag: map[string]bool{}}
-	h.s = New(Config{HealthInterval: time.Hour, NetDebounce: 10 * time.Millisecond, BackoffMin: 20 * time.Millisecond, BackoffMax: 50 * time.Millisecond}, Hooks{
+	h.s = New(Config{HealthInterval: time.Hour, NetDebounce: 10 * time.Millisecond, BackoffMin: 20 * time.Millisecond, BackoffMax: 50 * time.Millisecond, MinDownTime: time.Nanosecond}, Hooks{
 		Build: func() (*configgen.Output, error) {
 			return &configgen.Output{
 				Config:       []byte{byte(h.cfgVer.Load())},
@@ -203,7 +203,7 @@ func TestDisconnect(t *testing.T) {
 
 func TestRecoversQuicklyWhileServerDown(t *testing.T) {
 	h := &harness{failTag: map[string]bool{"srv-s1": true}}
-	h.s = New(Config{HealthInterval: time.Hour, RecoveryInterval: 20 * time.Millisecond, NetDebounce: 10 * time.Millisecond}, Hooks{
+	h.s = New(Config{HealthInterval: time.Hour, RecoveryInterval: 20 * time.Millisecond, NetDebounce: 10 * time.Millisecond, MinDownTime: time.Nanosecond}, Hooks{
 		Build: func() (*configgen.Output, error) {
 			return &configgen.Output{Config: []byte{0}, RuleSets: map[string][]byte{}, OutboundTags: map[string]string{"s1": "srv-s1"}}, nil
 		},
@@ -225,4 +225,45 @@ func TestRecoversQuicklyWhileServerDown(t *testing.T) {
 	h.engines[0].mu.Unlock()
 	// with HealthInterval=1h only the fast recovery probing can get us here
 	waitFor(t, "connected", func() bool { return h.s.Status().State == StateConnected })
+}
+
+func TestShortBlipDoesNotDegrade(t *testing.T) {
+	h := newHarness(t)
+	h.s.cfg.MinDownTime = time.Hour
+	_ = h.s.Connect()
+	waitFor(t, "connected", func() bool { return h.s.Status().State == StateConnected })
+	h.mu.Lock()
+	h.failTag["srv-s2"] = true
+	h.mu.Unlock()
+	for i := 0; i < 4; i++ {
+		h.s.CheckNow()
+	}
+	if st := h.s.Status().State; st != StateConnected {
+		t.Fatalf("failures shorter than MinDownTime must not degrade, got %s", st)
+	}
+	if n := h.engines[0].closes.Load(); n != 0 {
+		t.Fatalf("connections closed %d times during a short blip", n)
+	}
+}
+
+func TestFallbackURLKeepsServerHealthy(t *testing.T) {
+	h := newHarness(t)
+	h.s.cfg.FallbackHealthURL = "http://fallback"
+	_ = h.s.Connect()
+	waitFor(t, "connected", func() bool { return h.s.Status().State == StateConnected })
+	h.mu.Lock()
+	h.failTag["http://x"] = true // the probe site is down, the servers are fine
+	h.mu.Unlock()
+	for i := 0; i < 3; i++ {
+		h.s.CheckNow()
+	}
+	st := h.s.Status()
+	if st.State != StateConnected {
+		t.Fatalf("state %s, want connected via the fallback URL", st.State)
+	}
+	for _, sv := range st.Servers {
+		if !sv.Healthy {
+			t.Fatalf("server %s marked unhealthy", sv.ID)
+		}
+	}
 }

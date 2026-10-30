@@ -161,7 +161,7 @@ func (s *Service) Run(ctx context.Context) error {
 		defer fw.Close()
 	}
 
-	s.sup = supervisor.New(supervisor.Config{}, supervisor.Hooks{
+	s.sup = supervisor.New(supervisor.Config{FallbackHealthURL: model.FallbackHealthURL}, supervisor.Hooks{
 		Build:            s.build,
 		Write:            s.write,
 		Start:            s.startEngine,
