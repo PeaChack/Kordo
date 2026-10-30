@@ -1,0 +1,113 @@
+# Tests on Windows (part of the packages and the golden configs are Windows-only),
+# the installer is cross-built on Linux. A tag v* publishes a GitHub release.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: vet + tests (Windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: |
+          out="$(gofmt -l $(git ls-files '*.go' | grep -v '^third_party/'))"
+          if [ -n "$out" ]; then echo "not gofmt-ed:"; echo "$out"; exit 1; fi
+      - name: go vet
+        run: |
+          tags="$(tr -d '[:space:]' < build/tags.txt)"
+          go vet -tags "$tags" ./...
+          go vet -tags desktop,production ./windows/gui
+      - name: go test
+        run: go test -tags "$(tr -d '[:space:]' < build/tags.txt)" ./...
+
+  installer:
+    name: installer (cross-built on Linux)
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Install NSIS
+        run: sudo apt-get update -q && sudo apt-get install -y -q nsis
+      - name: Version
+        id: version
+        run: |
+          base="$(tr -d '[:space:]' < build/version.txt)"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            v="${GITHUB_REF_NAME#v}"
+            if [[ "${v%%[-+]*}" != "$base" ]]; then
+              echo "::warning::tag $GITHUB_REF_NAME does not match build/version.txt ($base)"
+            fi
+          else
+            v="$base-dev.$GITHUB_RUN_NUMBER"
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - name: Build binaries and installer
+        run: build/build-installer.sh "${{ steps.version.outputs.version }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kordo-Setup-${{ steps.version.outputs.version }}
+          path: |
+            dist/Kordo-Setup-*.exe
+            dist/Kordo-Setup-*.exe.sha256
+          if-no-files-found: error
+
+  release:
+    name: GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test, installer]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Kordo-Setup-${{ needs.installer.outputs.version }}
+          path: dist
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.installer.outputs.version }}
+        run: |
+          cd dist
+          sha256sum -c "Kordo-Setup-$VERSION.exe.sha256"
+          flags=()
+          if [[ "$VERSION" == *-* ]]; then flags+=(--prerelease); fi
+          {
+            echo "### Установка"
+            echo "Скачайте \`Kordo-Setup-$VERSION.exe\` и запустите (нужны права администратора)."
+            echo "Установщик не подписан: SmartScreen может предупредить («Подробнее» → «Выполнить в любом случае»)."
+            echo
+            echo "SHA-256:"
+            echo '```'
+            cat "Kordo-Setup-$VERSION.exe.sha256"
+            echo '```'
+          } > notes.md
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Kordo $VERSION" \
+            --notes-file notes.md --generate-notes "${flags[@]}" \
+            "Kordo-Setup-$VERSION.exe" "Kordo-Setup-$VERSION.exe.sha256"

@@ -355,7 +355,7 @@ function renderServers(main) {
     await guard(() => rpc('servers.remove', { id: s.id }), 'Сервер удалён');
     loadAll();
   });
-  $('[data-en]').forEach(cb => cb.onchange = async () => {
+  $$('[data-en]').forEach(cb => cb.onchange = async () => {
     const cur = S.servers.find(s => s.id === cb.dataset.en);
     if (!cb.checked) {
       const n = S.rules.filter(r => r.target.kind === 'server' && r.target.serverId === cur.id).length;
@@ -545,10 +545,10 @@ function drawRuleList() {
     const r = S.rules.find(r => r.id === b.dataset.unlearn);
     updateRule(r.id, { learned: r.learned.filter((_, i) => i !== +b.dataset.i) });
   });
-  $('[data-forget]', box).forEach(b => b.onclick = async () => { await guard(() => rpc('children.forget', { key: b.dataset.forget })).catch(() => { }); loadAll(); });
+  $$('[data-forget]', box).forEach(b => b.onclick = async () => { await guard(() => rpc('children.forget', { key: b.dataset.forget })).catch(() => { }); loadAll(); });
   // Changing a child's route: learned children are edited in place; a
   // "direct" answer becomes a learned child of the app with the new route.
-  $('.chip-sel', box).forEach(sel => sel.onchange = async () => {
+  $$('.chip-sel', box).forEach(sel => sel.onchange = async () => {
     const r = S.rules.find(r => r.id === sel.dataset.rule);
     const target = keyTarget(sel.value);
     if (sel.dataset.kidKind === 'learned') {

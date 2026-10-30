@@ -1,12 +1,14 @@
 ﻿# Builds Kordo for Windows into .\bin
-#   powershell -ExecutionPolicy Bypass -File build\build.ps1 [-SkipTests]
-param([switch]$SkipTests)
+#   powershell -ExecutionPolicy Bypass -File build\build.ps1 [-SkipTests] [-Version 1.2.3]
+# The installer is built on Linux: build/build-installer.sh
+param([switch]$SkipTests, [string]$Version)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
 $tags = (Get-Content "$root\build\tags.txt" -Raw).Trim()
-$version = '0.2.1'
+$version = if ($Version) { $Version.TrimStart('v') } else { (Get-Content "$root\build\version.txt" -Raw).Trim() }
+$winver = (($version -split '[-+]')[0] + '.0.0.0').Split('.')[0..3] -join '.'
 $ld = "-s -w -X github.com/PeaChack/Kordo/windows/service.Version=$version"
 $winres = 'github.com/tc-hib/go-winres@v0.3.3'
 
@@ -19,7 +21,7 @@ if (-not $SkipTests) {
 Write-Host '== resources (icon, manifest, version)' -ForegroundColor Cyan
 foreach ($dir in 'windows\gui', 'cmd\kordo-svc', 'cmd\kordoctl') {
   Push-Location $dir
-  go run $winres make --in winres\winres.json --out rsrc --arch amd64
+  go run $winres make --in winres\winres.json --out rsrc --arch amd64 --product-version $winver --file-version $winver
   if ($LASTEXITCODE) { Pop-Location; throw "go-winres failed in $dir" }
   Pop-Location
 }
