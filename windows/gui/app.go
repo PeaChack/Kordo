@@ -39,6 +39,7 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.startBridge()
 	a.enableAutostartOnce()
+	go cleanupUpdates()
 	runtime.OnFileDrop(ctx, func(x, y int, paths []string) {
 		runtime.EventsEmit(ctx, "files:dropped", a.resolvePaths(paths))
 	})

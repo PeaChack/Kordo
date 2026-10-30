@@ -110,7 +110,7 @@ func (a *App) InstallUpdate() error {
 	}
 	want := strings.ToLower(fields[0])
 
-	dir := filepath.Join(os.TempDir(), "Kordo-update")
+	dir := updateDir()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
@@ -245,4 +245,30 @@ func download(ctx context.Context, url string, limit int64, timeout time.Duratio
 		err = errors.New("файл слишком большой")
 	}
 	return nil, err
+}
+
+func updateDir() string { return filepath.Join(os.TempDir(), "Kordo-update") }
+
+// cleanupUpdates removes installers downloaded by InstallUpdate. Files from
+// the last hour are kept: the installer may still be running when it starts
+// the new window. Files in use cannot be deleted and are simply skipped.
+func cleanupUpdates() {
+	dir := updateDir()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	left := 0
+	for _, e := range entries {
+		fi, err := e.Info()
+		if err == nil && time.Since(fi.ModTime()) > time.Hour {
+			if os.Remove(filepath.Join(dir, e.Name())) == nil {
+				continue
+			}
+		}
+		left++
+	}
+	if left == 0 {
+		_ = os.Remove(dir)
+	}
 }
