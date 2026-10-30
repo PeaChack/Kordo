@@ -50,10 +50,20 @@ func (DPAPI) Unprotect(b []byte) ([]byte, error) {
 // SecureDir creates dir and restricts it to SYSTEM and Administrators
 // (full control); other users get no access.
 func SecureDir(dir string) error {
+	return setDACL(dir, "D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)")
+}
+
+// ReadableDir is like SecureDir but lets local users read (logs: secrets are
+// masked there, and users need them to report problems).
+func ReadableDir(dir string) error {
+	return setDACL(dir, "D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FR;;;BU)")
+}
+
+func setDACL(dir, sddl string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	sd, err := windows.SecurityDescriptorFromString("D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)")
+	sd, err := windows.SecurityDescriptorFromString(sddl)
 	if err != nil {
 		return err
 	}

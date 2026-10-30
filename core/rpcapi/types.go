@@ -32,6 +32,7 @@ const (
 	MKillSwitchClear = "killswitch.clear"
 	MLogsTail        = "logs.tail"
 	MChildrenAnswer  = "children.answer"
+	MChildrenForget  = "children.forget"
 	MActivity        = "activity.list"
 	MDiagnostics     = "diagnostics.collect"
 )

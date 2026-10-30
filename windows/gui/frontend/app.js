@@ -13,7 +13,7 @@ const Mock = (() => {
       { id: 'r2', match: { kind: 'name', value: 'Telegram.exe' }, target: { kind: 'server', serverId: 'b2' }, children: 'ask' },
       { id: 'r3', match: { kind: 'store_package', value: 'Microsoft.WindowsTerminal' }, target: { kind: 'direct' }, children: 'inherit' },
     ],
-    profile: { defaultTarget: { kind: 'direct' }, killSwitch: 'vpn_apps', dns: { mode: 'via_server' }, allowLan: true, ipv6: 'auto', strictRoute: true, rules: [] },
+    profile: { childAnswers: [{ match: { kind: 'path', value: 'C:\Windows\System32\cmd.exe' }, target: { kind: 'direct' }, ruleId: 'r2' }], defaultTarget: { kind: 'direct' }, killSwitch: 'vpn_apps', dns: { mode: 'via_server' }, allowLan: true, ipv6: 'auto', strictRoute: true, rules: [] },
     status: { state: 'connected', servers: [{ id: 'a1', healthy: true, checked: true, rttMs: 48 }, { id: 'b2', healthy: false, checked: true, lastError: 'timeout' }], firewallAvailable: true, pendingAsks: [{ askId: 'q1', ruleId: 'r2', parentPath: 'C:\\Telegram\\Telegram.exe', childPath: 'C:\\Windows\\System32\\cmd.exe', shared: true }] },
   };
   const providers = [
@@ -138,6 +138,8 @@ const S = {
   appsTab: 'all',
   asks: [],
   activityTimer: null,
+  appsFilter: '',
+  actOnlyRules: true,
 };
 
 const STATE_TEXT = {
@@ -148,8 +150,8 @@ const STATE_TEXT = {
   reconnecting: ['Переподключение…', 'Ядро перезапускается'],
   blocked: ['Трафик заблокирован', 'Kill switch удерживает трафик до восстановления связи'],
 };
-const CHILD_TEXT = { inherit: 'Подпроцессы: как родитель', direct: 'Подпроцессы: напрямую', ask: 'Подпроцессы: спрашивать' };
-const KILL_TEXT = { off: 'Выключен', vpn_apps: 'Для VPN-приложений', all: 'Весь трафик' };
+const CHILD_TEXT = { inherit: 'Как родитель', direct: 'Напрямую', ask: 'Спрашивать' };
+const KILL_TEXT = { off: 'Выключен', vpn_apps: 'VPN-приложения', all: 'Весь трафик' };
 
 async function loadAll() {
   if (!S.online) return;
@@ -180,8 +182,26 @@ async function loadIcons(paths) {
 
 function applyStatus(st) {
   if (!st) return;
-  S.status = Object.assign({}, S.status, st);
+  const next = Object.assign({}, S.status, st);
+  // The service omits empty fields, so a missing error/nextTry means "cleared".
+  if (!('error' in st)) delete next.error;
+  if (!('nextTry' in st)) delete next.nextTry;
+  S.status = next;
   if (st.pendingAsks) S.asks = st.pendingAsks;
+}
+
+// explainError turns an engine error into something a person can act on.
+function explainError(msg) {
+  const m = String(msg || '');
+  if (/access is denied|отказано в доступе/i.test(m) && /tun/i.test(m))
+    return { title: 'Нет прав на создание туннеля', hint: 'Служба должна работать от имени SYSTEM. Переустановите её из консоли администратора: portico-svc.exe install.' };
+  if (/^configuration:/i.test(m))
+    return { title: 'Ошибка в настройках', hint: m.replace(/^configuration:\s*/i, ''), go: 'settings' };
+  if (/address already in use|only one usage of each socket/i.test(m))
+    return { title: 'Порт занят другой программой', hint: 'Закройте другие VPN-клиенты и попробуйте снова.' };
+  if (/health check failed/i.test(m))
+    return { title: 'Сервер не отвечал', hint: 'Проверьте сервер на вкладке «Серверы».', go: 'servers' };
+  return { title: 'Не удалось запустить туннель', hint: m };
 }
 
 function serverName(id) {
@@ -236,15 +256,22 @@ function renderHome(main) {
   const routed = S.rules.filter(r => r.target.kind === 'server').length;
   const healthRows = (S.status.servers || []).map(h => {
     const dot = !h.checked ? 'warn' : h.healthy ? 'ok' : 'bad';
-    const detail = !h.checked ? 'проверка…' : h.healthy ? `${h.rttMs} мс` : esc(h.lastError || 'нет ответа');
-    return `<div class="health"><span class="dot ${dot}"></span><b>${esc(serverName(h.id))}</b><span class="spacer"></span><span class="muted small">${detail}</span></div>`;
+    const detail = !h.checked ? 'проверка…' : h.healthy ? `${h.rttMs} мс` : 'не отвечает';
+    return `<div class="health" title="${esc(h.lastError || '')}"><span class="dot ${dot}"></span><b>${esc(serverName(h.id))}</b><span class="spacer"></span><span class="muted small">${detail}</span></div>`;
   }).join('');
   const ks = S.status.killSwitch || (S.profile && S.profile.killSwitch) || 'off';
   let banners = '';
-  if (S.status.error) banners += `<div class="banner bad">${esc(S.status.error)}</div>`;
-  if (S.status.firewallActive && st === 'off') banners += `<div class="banner warn">Фильтры kill switch всё ещё установлены — интернет может быть заблокирован. <button class="btn sm" id="clear-fw">Снять фильтры</button></div>`;
-  if (!S.servers.length) banners += `<div class="banner info">Начните с добавления сервера: раздел «Серверы» → «Добавить сервер».</div>`;
-  const asks = S.asks.map(a => `<div class="health"><span class="dot warn"></span><div style="min-width:0"><b>${esc(base(a.parentPath))}</b> запустил <b>${esc(base(a.childPath))}</b><div class="path">${esc(a.childPath)}</div></div><span class="spacer"></span><button class="btn sm" data-ask="${esc(a.askId)}">Решить…</button></div>`).join('');
+  if (S.status.error) {
+    const e = explainError(S.status.error);
+    banners += `<div class="banner bad"><div class="row"><div style="min-width:0;flex:1"><b>${esc(e.title)}</b>
+      <div class="small muted" style="margin-top:2px;user-select:text">${esc(e.hint)}</div></div>
+      ${e.go ? `<button class="btn sm" data-go="${e.go}">Открыть</button>` : ''}
+      <button class="btn sm" data-go="logs">Журнал</button>
+      ${st !== 'connected' ? '<button class="btn sm" id="retry">Повторить</button>' : ''}</div></div>`;
+  }
+  if (S.status.firewallActive && st === 'off') banners += `<div class="banner warn"><div class="row"><span style="flex:1">Фильтры kill switch остались — интернет может быть заблокирован.</span><button class="btn sm" id="clear-fw">Снять фильтры</button></div></div>`;
+  if (!S.servers.length) banners += `<div class="banner info">Начните с добавления сервера: «Серверы» → «Добавить сервер».</div>`;
+  const asks = S.asks.map(a => `<div class="health"><span class="dot warn"></span><div style="min-width:0"><b>${esc(base(a.parentPath))}</b> запустил <b>${esc(base(a.childPath))}</b></div><span class="spacer"></span><button class="btn sm" data-ask="${esc(a.askId)}">Решить…</button></div>`).join('');
   main.innerHTML = `
     ${banners}
     <div class="card hero">
@@ -263,11 +290,14 @@ function renderHome(main) {
     </div>
     <div class="grid" style="margin-top:14px">
       <div class="card"><h3>Серверы</h3>${healthRows || '<div class="muted small">Состояние появится после подключения.</div>'}</div>
-      <div class="card"><h3>Новые подпроцессы</h3>${asks || '<div class="muted small">Нет вопросов. Когда приложение с режимом «спрашивать» запустит другую программу, она появится здесь.</div>'}</div>
+      ${asks ? `<div class="card"><h3>Ждут решения</h3>${asks}</div>` : ''}
     </div>`;
   $('#power').onclick = () => toggleConnect();
   const cf = $('#clear-fw');
   if (cf) cf.onclick = () => guard(() => rpc('killswitch.clear'), 'Фильтры сняты').then(refreshStatus);
+  const rt = $('#retry');
+  if (rt) rt.onclick = async () => { try { applyStatus(await rpc('engine.connect')); } catch (e) { toast(String(e.message || e), 'bad'); } refreshStatus(); };
+  $$('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
   $$('[data-ask]').forEach(b => b.onclick = () => showAsk(S.asks.find(a => a.askId === b.dataset.ask)));
 }
 
@@ -296,13 +326,14 @@ function renderServers(main) {
     const h = (S.status.servers || []).find(h => h.id === s.id);
     const apps = S.rules.filter(r => r.target.kind === 'server' && r.target.serverId === s.id).length;
     const prov = (S.providers.find(p => p.id === s.provider) || {}).displayName || s.provider;
+    const killOn = S.profile && S.profile.killSwitch && S.profile.killSwitch !== 'off';
     let health = '<span class="pill pill-off">не проверен</span>';
     if (h && h.checked) health = h.healthy ? `<span class="pill pill-ok">${h.rttMs} мс</span>` : `<span class="pill pill-bad">нет ответа</span>`;
     return `<div class="card">
       <div class="row"><h3 style="margin:0">${esc(s.name)}</h3><span class="spacer"></span>
         <label class="switch" title="Включён"><input type="checkbox" data-en="${esc(s.id)}" ${s.enabled ? 'checked' : ''}><span></span></label></div>
       <div class="row" style="margin:8px 0"><span class="tag">${esc(prov)}</span><span class="path mono">${esc(serverHost(s))}</span></div>
-      <div class="row" style="margin-bottom:12px">${health}<span class="muted small" id="test-${esc(s.id)}"></span></div>
+      <div class="row" style="margin-bottom:12px">${s.enabled ? health : `<span class="pill pill-off">выключен</span><span class="muted small">приложения ${killOn ? 'блокируются' : 'идут напрямую'}</span>`}<span class="muted small" id="test-${esc(s.id)}"></span></div>
       <div class="row">
         <button class="btn sm" data-apps="${esc(s.id)}">Приложения (${apps})</button>
         <button class="btn sm" data-test="${esc(s.id)}">Проверить</button>
@@ -324,8 +355,15 @@ function renderServers(main) {
     await guard(() => rpc('servers.remove', { id: s.id }), 'Сервер удалён');
     loadAll();
   });
-  $$('[data-en]').forEach(cb => cb.onchange = async () => {
-    const s = Object.assign({}, S.servers.find(s => s.id === cb.dataset.en), { enabled: cb.checked });
+  $('[data-en]').forEach(cb => cb.onchange = async () => {
+    const cur = S.servers.find(s => s.id === cb.dataset.en);
+    if (!cb.checked) {
+      const n = S.rules.filter(r => r.target.kind === 'server' && r.target.serverId === cur.id).length;
+      const killOn = S.profile && S.profile.killSwitch && S.profile.killSwitch !== 'off';
+      const what = killOn ? 'будут заблокированы (включён kill switch)' : 'пойдут напрямую, без VPN';
+      if (n && !confirm(`Выключить «${cur.name}»? Его приложения (${n}) ${what}. Туннель переподключится.`)) { cb.checked = true; return; }
+    }
+    const s = Object.assign({}, cur, { enabled: cb.checked });
     await guard(() => rpc('servers.update', s)).catch(() => { });
     loadAll();
   });
@@ -438,43 +476,76 @@ function showServerDialog(existing) {
 }
 
 // ------------------------------------------------------------------ apps
+function childDecisions(r) {
+  const out = (r.learned || []).map((l, i) => ({ name: base(l.match.value), path: l.match.value, target: targetLabel(l.target), kind: 'learned', i, ruleId: r.id }));
+  for (const a of (S.profile && S.profile.childAnswers) || []) {
+    if (a.ruleId === r.id) out.push({ name: base(a.match.value), path: a.match.value, target: 'Напрямую', kind: 'answer', key: (a.match.kind + ':' + a.match.value).toLowerCase() });
+  }
+  return out;
+}
+
 function renderApps(main) {
+  const count = (k) => S.rules.filter(r => k === 'all' || targetKey(r.target) === k).length;
   const tabs = [['all', 'Все'], ...S.servers.map(s => ['s:' + s.id, s.name]), ['direct', 'Напрямую'], ['block', 'Блокировать']];
   if (!tabs.some(t => t[0] === S.appsTab)) S.appsTab = 'all';
-  const rules = S.rules.filter(r => S.appsTab === 'all' || targetKey(r.target) === S.appsTab);
-  const rows = rules.map(r => `
+  const def = S.profile ? S.profile.defaultTarget : { kind: 'direct' };
+  const asks = S.asks.map(a => `<div class="ask-row"><span class="dot warn"></span><div style="min-width:0;flex:1"><b>${esc(base(a.parentPath))}</b> запустил <b>${esc(base(a.childPath))}</b>
+      ${a.shared ? '<span class="tag">общая программа</span>' : ''}<div class="path">${esc(a.childPath)}</div></div>
+      <button class="btn sm" data-ans="${esc(a.askId)}" data-c="direct">Напрямую</button>
+      <button class="btn sm primary" data-ans="${esc(a.askId)}" data-c="parent">Как родитель</button></div>`).join('');
+  main.innerHTML = `
+    <div class="row"><div><h1>Приложения</h1><p class="sub">Остальные приложения: <b>${esc(targetLabel(def))}</b>
+      <a class="link small" id="to-settings">изменить</a></p></div><span class="spacer"></span>
+      <button class="btn primary" id="add-apps" ${S.servers.length ? '' : 'disabled title="Сначала добавьте сервер"'}>+ Добавить</button></div>
+    ${asks ? `<div class="card" style="margin-bottom:14px"><h3>Ждут решения</h3>${asks}</div>` : ''}
+    <div class="row" style="margin-bottom:12px">
+      <div class="tabs" style="margin:0">${tabs.map(([k, v]) => `<a data-apptab="${esc(k)}" class="${S.appsTab === k ? 'active' : ''}">${esc(v)} <span class="muted">${count(k)}</span></a>`).join('')}</div>
+      <span class="spacer"></span><input type="text" id="apps-filter" placeholder="Поиск" value="${esc(S.appsFilter)}" style="width:200px"></div>
+    <div class="card" style="padding:4px"><div class="rule rule-head"><span></span><span>Приложение</span><span>Маршрут</span><span>Подпроцессы</span><span></span></div><div id="rule-list"></div></div>
+    <div class="dropzone" id="dropzone">Перетащите сюда .exe или ярлык</div>`;
+  drawRuleList();
+  $('#to-settings').onclick = () => go('settings');
+  $('#add-apps').onclick = () => showAppPicker();
+  $$('[data-apptab]').forEach(a => a.onclick = () => { S.appsTab = a.dataset.apptab; render(); });
+  $('#apps-filter').oninput = (e) => { S.appsFilter = e.target.value; drawRuleList(); };
+  $$('[data-ans]').forEach(b => b.onclick = async () => {
+    await guard(() => rpc('children.answer', { askId: b.dataset.ans, choice: b.dataset.c, remember: true })).catch(() => { });
+    S.asks = S.asks.filter(x => x.askId !== b.dataset.ans);
+    loadAll();
+  });
+}
+
+function drawRuleList() {
+  const box = $('#rule-list');
+  if (!box) return;
+  const f = S.appsFilter.trim().toLowerCase();
+  const rules = S.rules.filter(r => (S.appsTab === 'all' || targetKey(r.target) === S.appsTab) &&
+    (!f || ruleTitle(r).toLowerCase().includes(f) || r.match.value.toLowerCase().includes(f)));
+  box.innerHTML = rules.map(r => {
+    const kids = childDecisions(r);
+    return `
     <div class="rule">
       ${r.match.kind === 'path' ? appIcon(r.match.value) : '<div class="app-ico">' + (r.match.kind === 'store_package' ? '◰' : '▣') + '</div>'}
       <div style="min-width:0">
         <div class="name">${esc(ruleTitle(r))} ${r.match.kind !== 'path' ? `<span class="tag">${r.match.kind === 'name' ? 'по имени' : 'Store'}</span>` : ''}</div>
         <div class="path" title="${esc(r.match.value)}">${esc(r.match.value)}</div>
-        ${(r.learned || []).length ? `<div class="learned">${r.learned.map((l, i) => `<span class="chip" title="${esc(l.match.value)}">↳ ${esc(base(l.match.value))}${l.target.kind === 'direct' ? ' (напрямую)' : ''}<button data-unlearn="${esc(r.id)}" data-i="${i}">×</button></span>`).join('')}</div>` : ''}
+        ${kids.length ? `<div class="learned">${kids.map(k => `<span class="chip" title="${esc(k.path)}">↳ ${esc(k.name)} <span class="muted">→ ${esc(k.target)}</span><button title="Забыть" ${k.kind === 'learned' ? `data-unlearn="${esc(k.ruleId)}" data-i="${k.i}"` : `data-forget="${esc(k.key)}"`}>×</button></span>`).join('')}</div>` : ''}
       </div>
       <select data-target="${esc(r.id)}">${targetOptions(targetKey(r.target))}</select>
       <select data-children="${esc(r.id)}" title="Что делать с программами, которые запускает это приложение">
         ${Object.entries(CHILD_TEXT).map(([k, v]) => `<option value="${k}" ${r.children === k ? 'selected' : ''}>${v}</option>`).join('')}
       </select>
       <button class="x" data-rm="${esc(r.id)}" title="Убрать правило">×</button>
-    </div>`).join('');
-  const def = S.profile ? S.profile.defaultTarget : { kind: 'direct' };
-  main.innerHTML = `
-    <div class="row"><div><h1>Приложения</h1><p class="sub">Какое приложение через какой сервер идёт. Остальные: <b>${esc(targetLabel(def))}</b>
-      <a class="muted small" style="cursor:pointer;text-decoration:underline" id="to-settings">изменить</a></p></div><span class="spacer"></span>
-      <button class="btn primary" id="add-apps" ${S.servers.length ? '' : 'disabled title="Сначала добавьте сервер"'}>+ Добавить приложения</button></div>
-    <div class="tabs">${tabs.map(([k, v]) => `<a data-apptab="${esc(k)}" class="${S.appsTab === k ? 'active' : ''}">${esc(v)}</a>`).join('')}</div>
-    <div class="card" style="padding:4px 4px">${rows || '<div class="empty">Здесь пока пусто. Добавьте приложения кнопкой выше или перетащите .exe / ярлык в окно.</div>'}</div>
-    <div class="dropzone" id="dropzone">Перетащите сюда .exe или ярлык, чтобы добавить приложение</div>`;
-  $('#to-settings').onclick = () => go('settings');
-  $('#add-apps').onclick = () => showAppPicker();
-  $$('[data-apptab]').forEach(a => a.onclick = () => { S.appsTab = a.dataset.apptab; render(); });
-  $$('[data-target]').forEach(sel => sel.onchange = () => updateRule(sel.dataset.target, { target: keyTarget(sel.value) }));
-  $$('[data-children]').forEach(sel => sel.onchange = () => updateRule(sel.dataset.children, { children: sel.value }));
-  $$('[data-rm]').forEach(b => b.onclick = async () => { await guard(() => rpc('rules.remove', { id: b.dataset.rm })); loadAll(); });
-  $$('[data-unlearn]').forEach(b => b.onclick = () => {
+    </div>`;
+  }).join('') || `<div class="empty">${S.rules.length ? 'Ничего не найдено.' : 'Здесь пока пусто. Нажмите «Добавить» или перетащите .exe в окно.'}</div>`;
+  $$('[data-target]', box).forEach(sel => sel.onchange = () => updateRule(sel.dataset.target, { target: keyTarget(sel.value) }));
+  $$('[data-children]', box).forEach(sel => sel.onchange = () => updateRule(sel.dataset.children, { children: sel.value }));
+  $$('[data-rm]', box).forEach(b => b.onclick = async () => { await guard(() => rpc('rules.remove', { id: b.dataset.rm })).catch(() => { }); loadAll(); });
+  $$('[data-unlearn]', box).forEach(b => b.onclick = () => {
     const r = S.rules.find(r => r.id === b.dataset.unlearn);
-    const learned = r.learned.filter((_, i) => i !== +b.dataset.i);
-    updateRule(r.id, { learned });
+    updateRule(r.id, { learned: r.learned.filter((_, i) => i !== +b.dataset.i) });
   });
+  $$('[data-forget]', box).forEach(b => b.onclick = async () => { await guard(() => rpc('children.forget', { key: b.dataset.forget })).catch(() => { }); loadAll(); });
 }
 
 async function updateRule(id, patch) {
@@ -514,7 +585,7 @@ async function showAppPicker(preselected = []) {
     <div class="picklist" id="picklist"><div class="empty">Загрузка…</div></div>`,
     `<span class="muted small" id="pick-count"></span><span class="spacer"></span>
      <label class="muted small">Маршрут</label><select id="pick-target">${targetOptions(defaultTargetKey())}</select>
-     <select id="pick-children">${Object.entries(CHILD_TEXT).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
+     <label class="muted small">Подпроцессы</label><select id="pick-children">${Object.entries(CHILD_TEXT).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
      <button class="btn primary" id="pick-add">Добавить</button>`);
   const drawList = async () => {
     $$('[data-ptab]', m.root).forEach(a => a.classList.toggle('active', a.dataset.ptab === tab));
@@ -570,58 +641,69 @@ async function showAppPicker(preselected = []) {
 let pickerAddFiles = null;
 
 // ------------------------------------------------------------------ activity
+function hasRule(path) {
+  const p = String(path || '').toLowerCase();
+  const b = base(p);
+  const hit = (m) => m.kind === 'path' ? m.value.toLowerCase() === p
+    : m.kind === 'name' ? m.value.toLowerCase() === b
+    : m.kind === 'store_package' ? p.includes('\\windowsapps\\' + m.value.toLowerCase() + '_') : false;
+  return S.rules.some(r => hit(r.match) || (r.learned || []).some(l => hit(l.match)));
+}
+
 async function renderActivity(main) {
-  main.innerHTML = `<div class="row"><div><h1>Активность</h1><p class="sub">Какие приложения сейчас куда отправляют трафик</p></div></div>
+  main.innerHTML = `<div class="row"><div><h1>Активность</h1><p class="sub">Куда сейчас идёт трафик приложений</p></div><span class="spacer"></span>
+    <label class="row small muted" style="gap:8px">Только приложения с правилами <label class="switch"><input type="checkbox" id="act-only" ${S.actOnlyRules ? 'checked' : ''}><span></span></label></label></div>
     <div class="card" style="padding:4px"><div id="act" class="empty">Загрузка…</div></div>`;
+  $('#act-only').onchange = (e) => { S.actOnlyRules = e.target.checked; draw(); };
   const draw = async () => {
     if (S.view !== 'activity') return;
     let list = [];
-    try { list = await rpc('activity.list') || []; } catch (e) { $('#act').innerHTML = `<div class="empty">${esc(e.message || e)}</div>`; return; }
+    try { list = await rpc('activity.list') || []; } catch (e) { const el = $('#act'); if (el) el.innerHTML = `<div class="empty">${esc(e.message || e)}</div>`; return; }
+    if (S.actOnlyRules) list = list.filter(e => e.targetId || e.target === 'block' || hasRule(e.app));
     await loadIcons(list.map(e => e.app));
     const el = $('#act');
     if (!el) return;
     if (!list.length) { el.className = 'empty'; el.innerHTML = S.status.state === 'off' ? 'Подключитесь, чтобы увидеть активность.' : 'Активных соединений нет.'; return; }
     el.className = '';
-    el.innerHTML = `<table><tr><th></th><th>Приложение</th><th>Маршрут</th><th>Соединений</th><th>↑ / ↓</th><th>Хосты</th></tr>
-      ${list.map(e => `<tr><td style="width:36px">${appIcon(e.app, 'sm')}</td><td><div class="name">${esc(base(e.app))}</div><div class="path">${esc(e.app)}</div></td>
+    el.innerHTML = `<table class="act"><colgroup><col style="width:40px"><col><col style="width:180px"><col style="width:70px"><col style="width:150px"><col style="width:28%"></colgroup>
+      <tr><th></th><th>Приложение</th><th>Маршрут</th><th>Соед.</th><th>↑ / ↓</th><th>Хосты</th></tr>
+      ${list.map(e => `<tr><td>${appIcon(e.app, 'sm')}</td><td style="min-width:0"><div class="name">${esc(base(e.app))}</div><div class="path" title="${esc(e.app)}">${esc(e.app)}</div></td>
       <td>${e.targetId ? `<span class="pill pill-ok">${esc(e.target)}</span>` : e.target === 'block' ? '<span class="pill pill-bad">блок</span>' : '<span class="pill pill-off">напрямую</span>'}</td>
-      <td>${e.conns}</td><td class="small">${fmtBytes(e.upload)} / ${fmtBytes(e.download)}</td><td class="small muted" style="max-width:280px">${esc((e.hosts || []).join(', '))}</td></tr>`).join('')}</table>`;
+      <td>${e.conns}</td><td class="small">${fmtBytes(e.upload)} / ${fmtBytes(e.download)}</td><td class="small muted"><div class="hosts" title="${esc((e.hosts || []).join('\n'))}">${esc((e.hosts || []).join(', '))}</div></td></tr>`).join('')}</table>`;
   };
   await draw();
   clearInterval(S.activityTimer);
-  S.activityTimer = setInterval(draw, 2000);
+  S.activityTimer = setInterval(draw, 3000);
 }
 
 // ------------------------------------------------------------------ settings
 function renderSettings(main) {
   const p = S.profile;
   if (!p) { main.innerHTML = '<div class="empty">Загрузка…</div>'; return; }
-  const seg = (name, value, opts) => `<div class="seg" data-seg="${name}">${opts.map(([k, v]) => `<button data-v="${esc(k)}" class="${value === k ? 'on' : ''}">${esc(v)}</button>`).join('')}</div>`;
+  const seg = (name, value, opts) => `<div class="seg" data-seg="${name}">${opts.map(([k, v, t]) => `<button data-v="${esc(k)}" class="${value === k ? 'on' : ''}" title="${esc(t || '')}">${esc(v)}</button>`).join('')}</div>`;
   const sw = (name, value) => `<label class="switch"><input type="checkbox" data-sw="${name}" ${value ? 'checked' : ''}><span></span></label>`;
+  const row = (label, hint, control) => `<div class="field"><div><b>${label}</b>${hint ? `<div class="hint">${hint}</div>` : ''}</div><div>${control}</div></div>`;
   const inverse = p.defaultTarget.kind === 'server';
   main.innerHTML = `
-    <h1>Настройки</h1><p class="sub">Изменения применяются сразу. Правила приложений обновляются без разрыва соединений, остальное — с переподключением.</p>
+    <h1>Настройки</h1><p class="sub">Применяются сразу.</p>
     <div class="card">
-      <div class="field"><div><b>Режим</b><div class="hint">Через VPN идут только выбранные приложения — или все, кроме выбранных.</div></div>
-        <div>${seg('mode', inverse ? 'inverse' : 'only', [['only', 'Только выбранные через VPN'], ['inverse', 'Все через VPN, кроме…']])}
-        ${inverse ? `<div style="margin-top:10px" class="row"><span class="muted small">Сервер по умолчанию</span><select id="def-server">${S.servers.map(s => `<option value="${esc(s.id)}" ${p.defaultTarget.serverId === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>` : ''}</div></div>
-      <div class="field"><div><b>Kill switch</b><div class="hint">Что блокировать, если туннель упал. «Весь трафик» — разрешены только Portico, локальная сеть (если включена) и DHCP. Фильтры переживают сбой службы и перезагрузку; при ручном отключении снимаются.</div></div>
-        <div>${seg('kill', p.killSwitch || 'off', [['off', 'Выключен'], ['vpn_apps', 'VPN-приложения'], ['all', 'Весь трафик']])}
-        ${S.status.firewallAvailable === false ? '<div class="err small">WFP недоступен — kill switch не работает.</div>' : ''}</div></div>
-      <div class="field"><div><b>DNS</b><div class="hint">Весь DNS перехватывается ядром. На Windows DNS-запросы делает системная служба, поэтому разделить их по приложениям нельзя.</div></div>
-        <div>${seg('dns', p.dns.mode || 'via_server', [['via_server', 'DoH через сервер'], ['doh_direct', 'DoH напрямую'], ['system', 'Системный']])}
-        <div class="row" style="margin-top:10px"><span class="muted small">DoH-сервер (IP)</span><input type="text" id="doh" value="${esc(p.dns.doh || '')}" placeholder="1.1.1.1" style="width:160px">
-        ${p.dns.mode === 'via_server' || !p.dns.mode ? `<span class="muted small">через</span><select id="dns-server"><option value="">авто</option>${S.servers.map(s => `<option value="${esc(s.id)}" ${p.dns.serverId === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>` : ''}</div></div></div>
-      <div class="field"><div><b>Локальная сеть напрямую</b><div class="hint">Принтеры, NAS, роутер — мимо туннеля.</div></div><div>${sw('allowLan', p.allowLan)}</div></div>
-      <div class="field"><div><b>IPv6</b><div class="hint">«Авто» — IPv6 используется, только если он есть у провайдера; иначе блокируется, чтобы не было утечек.</div></div>
-        <div>${seg('ipv6', p.ipv6 || 'auto', [['auto', 'Авто'], ['block', 'Блокировать']])}</div></div>
-      <div class="field"><div><b>Строгая маршрутизация</b><div class="hint">strict_route: защищает от утечек DNS. Выключите, если в вашей системе с ней не работает сеть.</div></div><div>${sw('strictRoute', p.strictRoute)}</div></div>
-      <div class="field"><div><b>Стек TUN</b><div class="hint">mixed — по умолчанию; system/gvisor — при проблемах с определёнными приложениями.</div></div>
-        <div>${seg('stack', p.stack || 'mixed', [['mixed', 'mixed'], ['system', 'system'], ['gvisor', 'gvisor']])}</div></div>
-      <div class="field"><div><b>Подключаться при старте</b><div class="hint">Служба подключится после загрузки Windows.</div></div><div>${sw('connectOnStart', p.connectOnStart)}</div></div>
-      <div class="field"><div><b>Запускать окно при входе</b><div class="hint">Только интерфейс; служба работает всегда.</div></div><div><label class="switch"><input type="checkbox" id="gui-auto"><span></span></label></div></div>
-      <div class="field"><div><b>Фильтры брандмауэра</b><div class="hint">Аварийно снять все фильтры Portico (если интернет пропал после сбоя).</div></div><div><button class="btn danger" id="fw-clear">Снять все фильтры</button></div></div>
-    </div>`;
+      ${row('Через VPN идут', '', seg('mode', inverse ? 'inverse' : 'only', [['only', 'Выбранные', 'Только приложения из списка'], ['inverse', 'Все, кроме выбранных', 'Всё через сервер, кроме приложений из списка']]) +
+        (inverse ? `<div style="margin-top:8px" class="row"><span class="muted small">Сервер</span><select id="def-server">${S.servers.map(s => `<option value="${esc(s.id)}" ${p.defaultTarget.serverId === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>` : ''))}
+      ${row('Kill switch', 'Если туннель упал', seg('kill', p.killSwitch || 'off', [['off', 'Выкл'], ['vpn_apps', 'VPN-приложения', 'Блокировать приложения, назначенные серверам'], ['all', 'Весь трафик', 'Блокировать всё, кроме локальной сети']]) +
+        (S.status.firewallAvailable === false ? '<div class="err small">Брандмауэр недоступен</div>' : ''))}
+      ${row('DNS', 'Для всех приложений сразу', seg('dns', p.dns.mode || 'via_server', [['via_server', 'Через VPN', 'DoH через сервер — провайдер не видит запросы'], ['doh_direct', 'DoH напрямую'], ['system', 'Системный']]) +
+        `<div class="row" style="margin-top:8px"><input type="text" id="doh" value="${esc(p.dns.doh || '')}" placeholder="1.1.1.1" style="width:130px" title="IP DoH-сервера">
+        ${p.dns.mode === 'via_server' || !p.dns.mode ? `<select id="dns-server" title="Через какой сервер"><option value="">сервер: авто</option>${S.servers.map(s => `<option value="${esc(s.id)}" ${p.dns.serverId === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>` : ''}</div>`)}
+      ${row('Локальная сеть мимо VPN', '', sw('allowLan', p.allowLan))}
+      ${row('IPv6', '', seg('ipv6', p.ipv6 || 'auto', [['auto', 'Авто', 'Блокируется, если у провайдера нет IPv6'], ['block', 'Блокировать']]))}
+      ${row('Подключаться при запуске Windows', '', sw('connectOnStart', p.connectOnStart))}
+      ${row('Открывать окно при входе', '', '<label class="switch"><input type="checkbox" id="gui-auto"><span></span></label>')}
+    </div>
+    <details class="card" style="margin-top:14px"><summary class="muted">Дополнительно</summary>
+      ${row('Строгая маршрутизация', 'Защита от утечек DNS', sw('strictRoute', p.strictRoute))}
+      ${row('Стек TUN', '', seg('stack', p.stack || 'mixed', [['mixed', 'mixed'], ['system', 'system'], ['gvisor', 'gvisor']]))}
+      ${row('Фильтры брандмауэра', 'Если пропал интернет после сбоя', '<button class="btn danger" id="fw-clear">Снять все</button>')}
+    </details>`;
   const save = async (mut) => {
     const np = JSON.parse(JSON.stringify(S.profile));
     mut(np);
@@ -657,7 +739,8 @@ async function renderLogs(main) {
   let file = renderLogs.file || 'service';
   main.innerHTML = `<div class="row" style="margin-bottom:14px"><h1 style="margin:0">Журнал</h1><span class="spacer"></span>
     <div class="seg"><button data-f="service" class="${file === 'service' ? 'on' : ''}">Служба</button><button data-f="core" class="${file === 'core' ? 'on' : ''}">Ядро</button></div>
-    <button class="btn" id="log-refresh">Обновить</button><button class="btn" id="diag">Собрать диагностику</button></div>
+    <label class="row small muted" style="gap:8px" title="Ядро пишет каждое соединение. Замедляет сеть — включайте только для диагностики.">Подробно <label class="switch"><input type="checkbox" id="verbose" ${S.profile && S.profile.verboseLog ? 'checked' : ''}><span></span></label></label>
+    <button class="btn" id="log-refresh">Обновить</button><button class="btn" id="diag">Диагностика</button></div>
     <pre class="log mono" id="log">Загрузка…</pre>`;
   const load = async () => {
     try {
@@ -669,6 +752,12 @@ async function renderLogs(main) {
   };
   $$('[data-f]').forEach(b => b.onclick = () => { renderLogs.file = b.dataset.f; renderLogs(main); });
   $('#log-refresh').onclick = load;
+  $('#verbose').onchange = async (e) => {
+    const np = JSON.parse(JSON.stringify(S.profile));
+    np.verboseLog = e.target.checked;
+    await guard(() => rpc('profile.set', { profile: np }), e.target.checked ? 'Подробный журнал включён' : 'Подробный журнал выключен').catch(() => { });
+    await loadAll();
+  };
   $('#diag').onclick = async () => {
     const d = await guard(() => rpc('diagnostics.collect'));
     const text = JSON.stringify(d, null, 2);
@@ -685,12 +774,11 @@ function showAsk(a) {
     <p><b>${esc(base(a.parentPath))}</b> запустил <b>${esc(base(a.childPath))}</b>.</p>
     <p class="path">${esc(a.childPath)}</p>
     ${a.shared ? `<div class="banner warn">${esc(base(a.childPath))} — общая системная программа. Если пустить её через VPN, через VPN пойдут <b>все</b> её экземпляры в системе.</div>` : ''}
-    <p class="muted small">Пока вы не ответили, он работает по правилу «${esc(a.shared ? 'напрямую' : 'как родитель')}».</p>
-    <label class="row small"><input type="checkbox" id="ask-remember" checked> Запомнить выбор</label>`,
+    <p class="muted small">Пока вы не ответили, он работает по правилу «${esc(a.shared ? 'напрямую' : 'как родитель')}». Решение появится под приложением во вкладке «Приложения», там его можно отменить.</p>`,
     `<button class="btn" data-c="direct">Напрямую</button><button class="btn primary" data-c="parent">Как родитель (${esc(ruleTargetName(a.ruleId))})</button>`);
   $$('[data-c]', m.root).forEach(b => b.onclick = async () => {
     m.close();
-    await guard(() => rpc('children.answer', { askId: a.askId, choice: b.dataset.c, remember: $('#ask-remember') ? $('#ask-remember').checked : true })).catch(() => { });
+    await guard(() => rpc('children.answer', { askId: a.askId, choice: b.dataset.c, remember: true })).catch(() => { });
     S.asks = S.asks.filter(x => x.askId !== a.askId);
     loadAll();
   });

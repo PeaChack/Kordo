@@ -239,6 +239,32 @@ func (s *Service) handle(ctx context.Context, c *rpcapi.Conn, method string, par
 		}
 		return text, nil
 
+	case rpcapi.MChildrenForget:
+		req, err := decode[struct {
+			Key string `json:"key"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+		err = s.store.Update(func(p *model.Profile, _ *[]model.Server) error {
+			out := p.ChildAnswers[:0]
+			for _, a := range p.ChildAnswers {
+				if a.Match.Key() != req.Key {
+					out = append(out, a)
+				}
+			}
+			p.ChildAnswers = out
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		delete(s.askedPaths, req.Key)
+		s.mu.Unlock()
+		s.afterChange()
+		return true, nil
+
 	case rpcapi.MChildrenAnswer:
 		req, err := decode[rpcapi.ChildAnswer](params)
 		if err != nil {
@@ -392,11 +418,15 @@ func (s *Service) answerChild(req rpcapi.ChildAnswer) (bool, error) {
 		}
 		s.learn(ask.RuleID, model.Learned{Match: ask.Child, Target: target, Source: "user"})
 	case "direct":
-		if !req.Remember {
-			return true, nil
-		}
+		// Every decision is kept and shown under the parent app, so the user
+		// can review or undo it later.
 		err := s.store.Update(func(p *model.Profile, _ *[]model.Server) error {
-			p.ChildAnswers = append(p.ChildAnswers, model.Learned{Match: ask.Child, Target: model.Direct(), Source: "user"})
+			for _, a := range p.ChildAnswers {
+				if a.Match.Key() == ask.Child.Key() {
+					return nil
+				}
+			}
+			p.ChildAnswers = append(p.ChildAnswers, model.Learned{Match: ask.Child, Target: model.Direct(), Source: "user", RuleID: ask.RuleID})
 			return nil
 		})
 		if err != nil {

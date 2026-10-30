@@ -59,7 +59,7 @@
     }
   ],
   "log": {
-    "level": "info",
+    "level": "warn",
     "timestamp": true
   },
   "outbounds": [

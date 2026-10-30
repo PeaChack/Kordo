@@ -322,7 +322,13 @@ func Generate(p model.Profile, servers []model.Server, env Env) (*Output, error)
 		"default_domain_resolver": "dns-local",
 	}
 
-	logOpts := map[string]any{"level": orDefault(env.LogLevel, "info"), "timestamp": true}
+	// Per-connection "info" logging costs real throughput with busy apps
+	// (torrents), so the engine only logs warnings unless asked otherwise.
+	level := orDefault(env.LogLevel, "warn")
+	if p.VerboseLog {
+		level = "info"
+	}
+	logOpts := map[string]any{"level": level, "timestamp": true}
 	if env.LogPath != "" {
 		logOpts["output"] = env.LogPath
 	}

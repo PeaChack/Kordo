@@ -12,11 +12,12 @@ import (
 )
 
 type fakeEngine struct {
-	mu     sync.Mutex
-	fail   map[string]bool
-	resets atomic.Int32
-	closes atomic.Int32
-	closed atomic.Bool
+	mu         sync.Mutex
+	fail       map[string]bool
+	closedTags []string
+	resets     atomic.Int32
+	closes     atomic.Int32
+	closed     atomic.Bool
 }
 
 func (f *fakeEngine) URLTest(ctx context.Context, tag, link string) (time.Duration, error) {
@@ -27,9 +28,15 @@ func (f *fakeEngine) URLTest(ctx context.Context, tag, link string) (time.Durati
 	}
 	return 42 * time.Millisecond, nil
 }
-func (f *fakeEngine) ResetNetwork()                                 { f.resets.Add(1) }
-func (f *fakeEngine) CloseAllConnections(ctx context.Context) error { f.closes.Add(1); return nil }
-func (f *fakeEngine) Close() error                                  { f.closed.Store(true); return nil }
+func (f *fakeEngine) ResetNetwork() { f.resets.Add(1) }
+func (f *fakeEngine) CloseConnections(ctx context.Context, tag string) error {
+	f.mu.Lock()
+	f.closedTags = append(f.closedTags, tag)
+	f.mu.Unlock()
+	f.closes.Add(1)
+	return nil
+}
+func (f *fakeEngine) Close() error { f.closed.Store(true); return nil }
 
 type harness struct {
 	s        *Supervisor
@@ -121,7 +128,7 @@ func TestRuleOnlyChangeDoesNotRestart(t *testing.T) {
 	}
 }
 
-func TestHealthFailuresDegradeThenRestart(t *testing.T) {
+func TestHealthFailuresCloseOnlyThatServer(t *testing.T) {
 	h := newHarness(t)
 	_ = h.s.Connect()
 	waitFor(t, "connected", func() bool { return h.s.Status().State == StateConnected })
@@ -134,10 +141,27 @@ func TestHealthFailuresDegradeThenRestart(t *testing.T) {
 	}
 	h.s.CheckNow()
 	waitFor(t, "connections closed", func() bool { return h.engines[0].closes.Load() == 1 })
+	h.engines[0].mu.Lock()
+	tags := append([]string(nil), h.engines[0].closedTags...)
+	h.engines[0].mu.Unlock()
+	if len(tags) != 1 || tags[0] != "srv-s2" {
+		t.Fatalf("closed %v, want only srv-s2", tags)
+	}
+	for i := 0; i < 5; i++ {
+		h.s.CheckNow()
+	}
+	if n := h.starts.Load(); n != 1 {
+		t.Fatalf("engine restarted %d times; a failing server must not restart it", n-1)
+	}
+	if h.engines[0].closed.Load() {
+		t.Fatal("engine must stay up")
+	}
+	h.mu.Lock()
+	h.failTag["srv-s2"] = false
+	h.mu.Unlock()
 	h.s.CheckNow()
-	waitFor(t, "restart", func() bool { return h.starts.Load() >= 2 })
-	if !h.engines[0].closed.Load() {
-		t.Fatal("old engine must be closed")
+	if st := h.s.Status().State; st != StateConnected {
+		t.Fatalf("after recovery: %s", st)
 	}
 }
 

@@ -190,8 +190,9 @@ type AppRule struct {
 // Learned is a child executable discovered by the process tracker.
 type Learned struct {
 	Match  Match  `json:"match"`
-	Target Target `json:"target"` // usually the parent's target; "direct" when the user chose so
-	Source string `json:"source"` // "inherit" | "user"
+	Target Target `json:"target"`           // usually the parent's target; "direct" when the user chose so
+	Source string `json:"source"`           // "inherit" | "user"
+	RuleID string `json:"ruleId,omitempty"` // for ChildAnswers: the app whose child this is
 }
 
 func (r AppRule) Validate(servers map[string]Server) error {
@@ -235,7 +236,8 @@ type Profile struct {
 	IPv6           string    `json:"ipv6"` // "auto" | "block"
 	StrictRoute    bool      `json:"strictRoute"`
 	ConnectOnStart bool      `json:"connectOnStart"`
-	Stack          string    `json:"stack,omitempty"` // tun stack: "mixed" (default) | "system" | "gvisor"
+	Stack          string    `json:"stack,omitempty"`      // tun stack: "mixed" (default) | "system" | "gvisor"
+	VerboseLog     bool      `json:"verboseLog,omitempty"` // engine logs every connection (slow with many connections)
 	Rules          []AppRule `json:"rules"`
 	ChildAnswers   []Learned `json:"childAnswers,omitempty"` // "always so" answers for shared children
 }

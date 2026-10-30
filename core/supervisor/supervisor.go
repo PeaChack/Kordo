@@ -7,7 +7,6 @@ package supervisor
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
@@ -33,7 +32,8 @@ const (
 type Engine interface {
 	URLTest(ctx context.Context, tag, link string) (time.Duration, error)
 	ResetNetwork()
-	CloseAllConnections(ctx context.Context) error
+	// CloseConnections closes connections routed via tag (all if tag is empty).
+	CloseConnections(ctx context.Context, tag string) error
 	Close() error
 }
 
@@ -81,8 +81,7 @@ type Config struct {
 	NetDebounce    time.Duration // default 1.5s
 	BackoffMin     time.Duration // default 1s
 	BackoffMax     time.Duration // default 60s
-	FailsToReset   int           // default 2: close connections, degraded
-	FailsToRestart int           // default 3: restart the engine
+	FailsToReset   int           // default 2: close the failing server's connections
 }
 
 func (c *Config) defaults() {
@@ -103,9 +102,6 @@ func (c *Config) defaults() {
 	}
 	if c.FailsToReset == 0 {
 		c.FailsToReset = 2
-	}
-	if c.FailsToRestart == 0 {
-		c.FailsToRestart = 3
 	}
 }
 
@@ -458,7 +454,11 @@ func (s *Supervisor) checkOnce() {
 	if gen != s.gen || s.eng == nil {
 		return // engine was restarted meanwhile
 	}
-	needReset, needRestart := false, false
+	// A failing server never restarts the engine: that would recreate the TUN
+	// and drop every connection, including direct ones. Instead, once a server
+	// fails FailsToReset checks in a row, only the connections going through it
+	// are closed so apps reconnect (WireGuard re-handshakes on its own).
+	var stale []string
 	for _, r := range collected {
 		h := s.health[r.id]
 		if h == nil {
@@ -474,27 +474,16 @@ func (s *Supervisor) checkOnce() {
 		h.Fails++
 		h.LastError = r.err.Error()
 		if h.Fails == s.cfg.FailsToReset {
-			needReset = true
-		}
-		if h.Fails >= s.cfg.FailsToRestart {
-			needRestart = true
-		}
-		if h.Fails >= 1 && s.hooks.NeedsHandshake != nil && s.hooks.NeedsHandshake(r.id) && h.Fails >= s.cfg.FailsToReset {
-			needRestart = true // stateful tunnels recover only by re-handshake
+			stale = append(stale, out.OutboundTags[r.id])
 		}
 	}
-	if needRestart {
-		for _, h := range s.health {
-			h.Fails = 0
-		}
-		s.scheduleRetryLocked(errors.New("health check failed repeatedly"))
-		return
-	}
-	if needReset {
+	if len(stale) > 0 {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			_ = eng.CloseAllConnections(ctx)
+			for _, tag := range stale {
+				_ = eng.CloseConnections(ctx, tag)
+			}
 		}()
 	}
 	allOK := true

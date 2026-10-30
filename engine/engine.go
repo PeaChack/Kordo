@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -185,7 +186,24 @@ func (i *Instance) Connections(ctx context.Context) ([]Connection, error) {
 	return v.Connections, nil
 }
 
-func (i *Instance) CloseAllConnections(ctx context.Context) error {
-	_, err := i.clash(ctx, http.MethodDelete, "/connections")
-	return err
+// CloseConnections closes the connections routed via tag, or all of them
+// when tag is empty.
+func (i *Instance) CloseConnections(ctx context.Context, tag string) error {
+	if tag == "" {
+		_, err := i.clash(ctx, http.MethodDelete, "/connections")
+		return err
+	}
+	conns, err := i.Connections(ctx)
+	if err != nil {
+		return err
+	}
+	for _, c := range conns {
+		for _, ch := range c.Chains {
+			if ch == tag {
+				_, _ = i.clash(ctx, http.MethodDelete, "/connections/"+url.PathEscape(c.ID))
+				break
+			}
+		}
+	}
+	return nil
 }

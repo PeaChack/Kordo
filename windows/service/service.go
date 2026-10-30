@@ -16,6 +16,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -102,6 +103,15 @@ func New(dataDir string, console bool) (*Service, error) {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			return nil, err
 		}
+	}
+	if os.Getenv("PORTICO_DATA") == "" {
+		_ = store.ReadableDir(s.logDir)
+	}
+	// A crash of the service (panic, fatal error) is written here; otherwise
+	// it would vanish with the service's invisible stderr.
+	if cf, err := os.OpenFile(filepath.Join(s.logDir, "crash.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); err == nil {
+		_ = debug.SetCrashOutput(cf, debug.CrashOptions{})
+		cf.Close()
 	}
 	lf, err := openRotating(filepath.Join(s.logDir, "service.log"), 5<<20)
 	if err != nil {
