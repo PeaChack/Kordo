@@ -48,25 +48,64 @@ data class Server(val id: String, val name: String, val provider: String, val ad
 data class AppItem(val pkg: String, val label: String, val system: Boolean, val info: ApplicationInfo)
 
 class MainActivity : ComponentActivity() {
+    private var connectAfterVpnGrant = false
     private val vpnPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        if (VpnService.prepare(this) == null) KordoVpnService.start(this)
-        else Toast.makeText(this, "Без разрешения на VPN Kordo не может работать", Toast.LENGTH_LONG).show()
+        permissionsRevision.intValue++
+        if (VpnService.prepare(this) == null) {
+            if (connectAfterVpnGrant) KordoVpnService.start(this)
+        } else {
+            Toast.makeText(this, "Без разрешения на VPN Kordo не может работать", Toast.LENGTH_LONG).show()
+        }
+        connectAfterVpnGrant = false
     }
-    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        permissionsRevision.intValue++
+    }
+
+    fun askVpn(thenConnect: Boolean = false) {
+        val intent = VpnService.prepare(this)
+        if (intent == null) {
+            if (thenConnect) KordoVpnService.start(this)
+            return
+        }
+        connectAfterVpnGrant = thenConnect
+        runCatching { vpnPermission.launch(intent) }.onFailure {
+            Toast.makeText(this, "Не удалось открыть запрос разрешения VPN", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    fun askNotifications() {
+        if (Build.VERSION.SDK_INT < 33) return
+        if (shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS) ||
+            getSharedPreferences("kordo", MODE_PRIVATE).getBoolean("askedNotifications", false).not()
+        ) {
+            getSharedPreferences("kordo", MODE_PRIVATE).edit().putBoolean("askedNotifications", true).apply()
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            // denied twice: Android no longer shows the dialog, open the app's notification settings
+            startActivity(Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName))
+        }
+    }
 
     fun connect() {
         if (Build.VERSION.SDK_INT >= 33 &&
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-        val intent = VpnService.prepare(this)
-        if (intent != null) vpnPermission.launch(intent) else KordoVpnService.start(this)
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
+            !getSharedPreferences("kordo", MODE_PRIVATE).getBoolean("askedNotifications", false)
+        ) askNotifications()
+        askVpn(thenConnect = true)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        permissionsRevision.intValue++ // the user may have changed something in system settings
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
-                Surface(Modifier.fillMaxSize()) { KordoUi(this) }
+            KordoTheme {
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { KordoUi(this) }
             }
         }
     }
@@ -76,7 +115,7 @@ private enum class Tab(val title: String) { HOME("Подключение"), SERV
 
 /** Bumped after every change so lists re-read the Go core. */
 private val revision = mutableIntStateOf(0)
-private fun changed() {
+fun changed() {
     revision.intValue++
     VpnState.changed()
 }
@@ -94,9 +133,38 @@ private fun appRoutes(): Map<String, String> {
 
 private fun toast(ctx: Context, text: String) = Toast.makeText(ctx, text, Toast.LENGTH_LONG).show()
 
+/** Full-screen pages shown over the tabs. */
+private sealed interface Page {
+    data object Permissions : Page
+    data class Editor(val serverId: String?) : Page
+}
+
+private val page = mutableStateOf<Page?>(null)
+
 @Composable
 private fun KordoUi(activity: MainActivity) {
     var tab by remember { mutableStateOf(Tab.HOME) }
+    val prefs = remember { activity.getSharedPreferences("kordo", Context.MODE_PRIVATE) }
+    var onboarded by remember { mutableStateOf(prefs.getBoolean("onboarded", false)) }
+    if (!onboarded) {
+        PermissionsScreen(activity, onboarding = true) {
+            prefs.edit().putBoolean("onboarded", true).apply()
+            onboarded = true
+        }
+        return
+    }
+    when (val p = page.value) {
+        Page.Permissions -> {
+            androidx.activity.compose.BackHandler { page.value = null }
+            PermissionsScreen(activity, onboarding = false) { page.value = null }
+            return
+        }
+        is Page.Editor -> {
+            ServerEditor(p.serverId) { page.value = null }
+            return
+        }
+        null -> {}
+    }
     UpdateCheck(activity)
     Scaffold(bottomBar = {
         NavigationBar {
@@ -149,7 +217,7 @@ private fun HomeScreen(activity: MainActivity, toServers: () -> Unit) {
             enabled = list.isNotEmpty() && status != Status.STOPPING,
             shape = CircleShape, modifier = Modifier.size(160.dp),
             colors = ButtonDefaults.buttonColors(containerColor = color),
-        ) { Text("⏻", fontSize = 56.sp) }
+        ) { Icon(PowerIcon, if (status == Status.OFF) "Подключить" else "Отключить", Modifier.size(72.dp)) }
         Spacer(Modifier.height(24.dp))
         Text(
             when (status) {
@@ -167,6 +235,12 @@ private fun HomeScreen(activity: MainActivity, toServers: () -> Unit) {
             Spacer(Modifier.height(16.dp))
             OutlinedButton(onClick = toServers) { Text("Сначала добавьте сервер") }
         }
+        val permRev by permissionsRevision
+        val missing = remember(permRev) { !requiredGranted(activity) }
+        if (missing) {
+            Spacer(Modifier.height(16.dp))
+            OutlinedButton(onClick = { page.value = Page.Permissions }) { Text("Нужны разрешения — выдать") }
+        }
         error?.let {
             Spacer(Modifier.height(16.dp))
             Text(it, color = MaterialTheme.colorScheme.error)
@@ -178,82 +252,44 @@ private fun HomeScreen(activity: MainActivity, toServers: () -> Unit) {
 
 @Composable
 private fun ServersScreen() {
-    val ctx = androidx.compose.ui.platform.LocalContext.current
     val rev by revision
     val list = remember(rev) { servers() }
-    var adding by remember { mutableStateOf(false) }
-    var deleting by remember { mutableStateOf<Server?>(null) }
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
             item { Text("Серверы", fontSize = 26.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(12.dp)) }
             if (list.isEmpty()) item {
-                Text("Пока пусто. Нажмите «+» и вставьте ссылку vless://, ss://, wireguard:// или содержимое .conf WireGuard.",
+                Text("Пока пусто. Нажмите «+»: можно вставить ссылку или конфиг, а можно заполнить поля вручную.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             items(list, key = { it.id }) { s ->
-                ListItem(
-                    headlineContent = { Text(s.name) },
-                    supportingContent = { Text("${s.provider} · ${s.address}") },
-                    trailingContent = { IconButton(onClick = { deleting = s }) { Icon(Icons.Filled.Delete, "Удалить") } },
-                )
-                HorizontalDivider()
+                Card(
+                    onClick = { page.value = Page.Editor(s.id) },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                ) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(s.name, fontWeight = FontWeight.SemiBold)
+                            Text(s.address, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                        }
+                        AssistChip(onClick = { page.value = Page.Editor(s.id) }, label = { Text(providerLabel(s.provider)) })
+                    }
+                }
             }
         }
-        FloatingActionButton(onClick = { adding = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)) {
-            Icon(Icons.Filled.Add, "Добавить сервер")
-        }
-    }
-    if (adding) AddServerDialog(onDone = { adding = false })
-    deleting?.let { s ->
-        AlertDialog(
-            onDismissRequest = { deleting = null },
-            title = { Text("Удалить «${s.name}»?") },
-            text = { Text("Правила приложений для этого сервера тоже будут удалены.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    runCatching { Mobile.removeServer(s.id) }.onFailure { toast(ctx, it.message ?: "$it") }
-                    deleting = null
-                    changed()
-                }) { Text("Удалить") }
-            },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Отмена") } },
+        ExtendedFloatingActionButton(
+            onClick = { page.value = Page.Editor(null) },
+            icon = { Icon(Icons.Filled.Add, null) }, text = { Text("Добавить") },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
         )
     }
 }
 
-@Composable
-private fun AddServerDialog(onDone: () -> Unit) {
-    val ctx = androidx.compose.ui.platform.LocalContext.current
-    var link by remember { mutableStateOf("") }
-    var name by remember { mutableStateOf("") }
-    var err by remember { mutableStateOf<String?>(null) }
-    AlertDialog(
-        onDismissRequest = onDone,
-        title = { Text("Добавить сервер") },
-        text = {
-            Column {
-                OutlinedTextField(link, { link = it }, label = { Text("Ссылка или .conf") }, minLines = 3, modifier = Modifier.fillMaxWidth())
-                TextButton(onClick = {
-                    val clip = ctx.getSystemService(ClipboardManager::class.java).primaryClip
-                    link = clip?.getItemAt(0)?.coerceToText(ctx)?.toString() ?: link
-                }) { Text("Вставить из буфера") }
-                OutlinedTextField(name, { name = it }, label = { Text("Название (необязательно)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                err?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                try {
-                    Mobile.addServer(link, name)
-                    changed()
-                    onDone()
-                } catch (e: Exception) {
-                    err = e.message ?: e.toString()
-                }
-            }) { Text("Добавить") }
-        },
-        dismissButton = { TextButton(onClick = onDone) { Text("Отмена") } },
-    )
+private fun providerLabel(p: String) = when (p) {
+    "vless" -> "VLESS"
+    "shadowsocks" -> "Shadowsocks"
+    "wireguard" -> "WireGuard"
+    else -> p
 }
 
 // ------------------------------------------------------------------ apps
@@ -401,6 +437,7 @@ private fun SettingsScreen() {
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 16.dp)
         )
         TextButton(onClick = { ctx.startActivity(Intent(android.provider.Settings.ACTION_VPN_SETTINGS)) }) { Text("Открыть настройки VPN") }
+        OutlinedButton(onClick = { page.value = Page.Permissions }, modifier = Modifier.padding(top = 8.dp)) { Text("Разрешения") }
         HorizontalDivider(Modifier.padding(vertical = 12.dp))
         Text("Версия ${BuildConfig.VERSION_NAME}")
         UpdateButton()

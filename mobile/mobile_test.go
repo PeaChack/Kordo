@@ -84,3 +84,48 @@ func TestFlow(t *testing.T) {
 		t.Fatalf("rules for a removed server remain: %s %s", Apps(), Settings())
 	}
 }
+
+const wgConf = `[Interface]
+PrivateKey = yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=
+Address = 10.66.0.2/32
+DNS = 1.1.1.1
+
+[Peer]
+PublicKey = xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=
+Endpoint = 192.0.2.10:51820
+AllowedIPs = 0.0.0.0/0, ::/0
+PersistentKeepalive = 25
+`
+
+func TestForms(t *testing.T) {
+	if err := Init(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	js, err := ParseServer(wgConf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var p parsed
+	_ = json.Unmarshal([]byte(js), &p)
+	if p.Provider != "wireguard" || !strings.Contains(string(p.Params), "192.0.2.10:51820") {
+		t.Fatalf("parsed: %s", js)
+	}
+	if _, err := SaveServer("", "wireguard", "Home", `{"privateKey":"bad"}`); err == nil {
+		t.Fatal("invalid params accepted")
+	}
+	id, err := SaveServer("", p.Provider, "Home", string(p.Params))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ss := `{"server":"203.0.113.9","port":8388,"method":"2022-blake3-aes-128-gcm","password":"AAAAAAAAAAAAAAAAAAAAAA=="}`
+	if _, err := SaveServer(id, "shadowsocks", "SS", ss); err != nil {
+		t.Fatal(err)
+	}
+	back, _ := ServerParams(id)
+	if !strings.Contains(back, `"provider":"shadowsocks"`) || !strings.Contains(back, `"name":"SS"`) {
+		t.Fatalf("after edit: %s", back)
+	}
+	if _, err := BuildConfig(false); err != nil {
+		t.Fatal(err)
+	}
+}
