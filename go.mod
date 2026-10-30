@@ -4,6 +4,7 @@ go 1.26.10
 
 require (
 	github.com/Microsoft/go-winio v0.6.4
+	github.com/energye/systray v1.0.3
 	github.com/miekg/dns v1.1.72
 	github.com/sagernet/sing v0.9.7-0.20261023115459-5dc452e537bf
 	github.com/sagernet/sing-box v1.14.4

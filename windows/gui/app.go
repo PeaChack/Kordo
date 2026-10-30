@@ -27,6 +27,8 @@ import (
 type App struct {
 	ctx context.Context
 
+	tray *tray
+
 	mu     sync.Mutex
 	client *rpcapi.Client
 	online bool
@@ -40,6 +42,7 @@ func (a *App) startup(ctx context.Context) {
 	a.startBridge()
 	a.enableAutostartOnce()
 	go cleanupUpdates()
+	a.startTray(frontendFS)
 	runtime.OnFileDrop(ctx, func(x, y int, paths []string) {
 		runtime.EventsEmit(ctx, "files:dropped", a.resolvePaths(paths))
 	})
@@ -47,6 +50,9 @@ func (a *App) startup(ctx context.Context) {
 }
 
 func (a *App) shutdown(ctx context.Context) {
+	if a.tray != nil {
+		a.tray.quit()
+	}
 	close(a.stop)
 	a.mu.Lock()
 	if a.client != nil {
@@ -67,6 +73,9 @@ func (a *App) setOnline(v bool) {
 	a.mu.Unlock()
 	if changed {
 		runtime.EventsEmit(a.ctx, "service:online", v)
+		if a.tray != nil {
+			a.tray.setOnline(v)
+		}
 	}
 }
 
@@ -89,6 +98,9 @@ func (a *App) connectLoop() {
 			continue
 		}
 		c := rpcapi.NewClient(conn, func(method string, params json.RawMessage) {
+			if method == rpcapi.NStateChanged && a.tray != nil {
+				a.tray.onStatus(params)
+			}
 			runtime.EventsEmit(a.ctx, "rpc:"+method, string(params))
 		})
 		a.mu.Lock()
