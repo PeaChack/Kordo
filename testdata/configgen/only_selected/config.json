@@ -1,12 +1,91 @@
 {
   "dns": {
-    "final": "dns-remote",
+    "final": "dns-direct",
     "reverse_mapping": true,
+    "rules": [
+      {
+        "rule_set": [
+          "apps-direct-t0"
+        ],
+        "server": "dns-direct"
+      },
+      {
+        "rule_set": [
+          "apps-a1-t0"
+        ],
+        "server": "dns-remote"
+      },
+      {
+        "rule_set": [
+          "apps-b2-t0"
+        ],
+        "server": "dns-remote"
+      },
+      {
+        "rule_set": [
+          "apps-c3-t0"
+        ],
+        "server": "dns-remote"
+      },
+      {
+        "rule_set": [
+          "apps-direct-t1"
+        ],
+        "server": "dns-direct"
+      },
+      {
+        "rule_set": [
+          "apps-a1-t1"
+        ],
+        "server": "dns-remote"
+      },
+      {
+        "rule_set": [
+          "apps-b2-t1"
+        ],
+        "server": "dns-remote"
+      },
+      {
+        "rule_set": [
+          "apps-c3-t1"
+        ],
+        "server": "dns-remote"
+      },
+      {
+        "rule_set": [
+          "apps-direct-t2"
+        ],
+        "server": "dns-direct"
+      },
+      {
+        "rule_set": [
+          "apps-a1-t2"
+        ],
+        "server": "dns-remote"
+      },
+      {
+        "rule_set": [
+          "apps-b2-t2"
+        ],
+        "server": "dns-remote"
+      },
+      {
+        "rule_set": [
+          "apps-c3-t2"
+        ],
+        "server": "dns-remote"
+      }
+    ],
     "servers": [
       {
         "detour": "srv-a1",
         "server": "1.1.1.1",
         "tag": "dns-remote",
+        "type": "https"
+      },
+      {
+        "server": "1.1.1.1",
+        "tag": "dns-direct",
         "type": "https"
       },
       {

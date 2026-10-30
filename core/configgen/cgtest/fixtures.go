@@ -52,6 +52,9 @@ func Fixtures(t testing.TB) map[string]Fixture {
 		{ID: "r1", Match: model.Match{Kind: model.MatchPath, Value: `C:\Steam\steam.exe`}, Target: model.Direct()},
 		{ID: "r2", Match: model.Match{Kind: model.MatchPath, Value: `C:\Apps\bank.exe`}, Target: model.ToServer("b2")},
 	}
+	// "all through a server, except": direct apps resolve via DoH directly
+	inverseDNS := inverse
+	inverseDNS.DNS = model.DNSMode{Mode: "via_server"}
 	disabled := ss
 	disabled.Enabled = false
 	envV6 := env
@@ -61,6 +64,7 @@ func Fixtures(t testing.TB) map[string]Fixture {
 	return map[string]Fixture{
 		"only_selected": {only, []model.Server{vless, ss, wg}, env},
 		"inverse":       {inverse, []model.Server{vless, disabled, wg}, envV6},
+		"inverse_dns":   {inverseDNS, []model.Server{vless, disabled, wg}, envV6},
 		"empty":         {model.DefaultProfile(), nil, env},
 	}
 }

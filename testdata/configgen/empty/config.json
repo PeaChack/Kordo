@@ -1,11 +1,16 @@
 {
   "dns": {
-    "final": "dns-remote",
+    "final": "dns-direct",
     "reverse_mapping": true,
     "servers": [
       {
         "server": "1.1.1.1",
         "tag": "dns-remote",
+        "type": "https"
+      },
+      {
+        "server": "1.1.1.1",
+        "tag": "dns-direct",
         "type": "https"
       },
       {
