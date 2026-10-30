@@ -43,6 +43,8 @@ windows/
   gui/           Wails-приложение (frontend/ — HTML/CSS/JS без сборщика), трей, обновления
 cmd/kordo-svc    точка входа службы
 cmd/kordoctl     CLI
+mobile/          Go-ядро для Android (gomobile)
+android/         приложение для Android (Kotlin)
 testdata/        golden-конфиги и фикстуры провайдеров
 build/           сборка, установщик, подпись, превью и автотест интерфейса
 docs/            ADR, эта страница
@@ -90,6 +92,26 @@ KORDO_SIGN_CMD="$PWD/build/sign-osslsigncode.sh" build/build-installer.sh 0.3.0
 
 Подписанный Kordo запускает обновление только с действительной подписью (WinVerifyTrust); неподписанные сборки проверяют только SHA-256 из релиза.
 
+## Android
+
+Приложение лежит в `android/` (Kotlin, Jetpack Compose, minSdk 26). Логика общая с Windows: Go-пакет `mobile/` хранит серверы, правила по пакетам и настройки в `files/state.json` и генерирует конфиг тем же `core/configgen`. Туннель, `protect()` сокетов, владельцы соединений и монитор сети — `libbox` из sing-box; `KordoVpnService` реализует его `PlatformInterface`.
+
+Оба Go-пакета собираются в одну библиотеку `android/app/libs/kordo.aar` форком gomobile от sing-box (`github.com/sagernet/gomobile` v0.1.12, как в `go.mod` sing-box), Java-пакет `app.kordo.core` (`Mobile`, `Libbox`). Нужны теги `badlinkname,tfogo_checklinkname0` и `-ldflags -checklinkname=0`, как в сборке самого sing-box.
+
+```bash
+# нужны Go, JDK 17+, Android SDK (ANDROID_HOME) с NDK (ANDROID_NDK_HOME)
+build/build-android.sh 0.3.0     # → dist/Kordo-0.3.0.apk + .sha256
+KORDO_ANDROID_TARGETS=android/arm64 build/build-android.sh   # быстрее, только arm64
+```
+
+**Подпись APK.** Android ставит обновление только поверх версии, подписанной тем же ключом, поэтому ключ один на всё время жизни приложения — потерять его нельзя. Создать (один раз):
+
+```bash
+keytool -genkeypair -v -keystore kordo-release.jks -alias kordo -keyalg RSA -keysize 4096 -validity 36500
+```
+
+Секреты репозитория для CI: `ANDROID_KEYSTORE_BASE64` (`base64 -w0 kordo-release.jks`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`kordo`), `ANDROID_KEY_PASSWORD`. Локально — те же значения в переменных `KORDO_KEYSTORE` (путь), `KORDO_KEYSTORE_PASSWORD`, `KORDO_KEY_ALIAS`, `KORDO_KEY_PASSWORD` или в `android/keystore.properties`. Без ключа APK подписывается debug-ключом: для проверки годится, но в релиз CI такой APK не кладёт.
+
 ## Тесты
 
 ```bash
@@ -106,8 +128,8 @@ go test -tags "$(cat build/tags.txt)" ./...
 ## CI и релизы
 
 `.github/workflows/ci.yml`:
-- в каждом PR и на `main`: `gofmt`, `go vet` и `go test` на Windows и на Linux, автотест интерфейса, сборка установщика на Linux (артефакт, версия `<version.txt>-dev.<номер запуска>`);
-- на тег `v*` — GitHub Release с `Kordo-Setup-<версия>.exe` и `.sha256`; теги с суффиксом (`v0.3.0-rc1`) — pre-release (обновление в окне их не предлагает).
+- в каждом PR и на `main`: `gofmt`, `go vet` и `go test` на Windows и на Linux, автотест интерфейса, сборка установщика и APK на Linux (артефакты, версия `<version.txt>-dev.<номер запуска>`);
+- на тег `v*` — GitHub Release с `Kordo-Setup-<версия>.exe`, `Kordo-<версия>.apk` (если в репозитории есть ключ подписи APK) и их `.sha256`; теги с суффиксом (`v0.3.0-rc1`) — pre-release (обновление в окне их не предлагает).
 
 Выпуск версии:
 
@@ -132,4 +154,4 @@ kordoctl activity | rules | servers | logs [core]
 
 - Правило для нового подпроцесса применяется после того, как ядро перечитает rule-set, поэтому самые первые пакеты очень короткоживущего процесса могут пройти по маршруту по умолчанию.
 - Точный режим по PID для общих exe (один `node.exe` через VPN, другой — нет) требует патча sing-box.
-- Android-версии пока нет.
+- Android: эмулятор в CI не запускается, приложение проверяется на устройстве вручную.
