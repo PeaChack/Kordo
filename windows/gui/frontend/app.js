@@ -36,7 +36,7 @@ const Mock = (() => {
         case 'apps.running': return [{ name: 'chrome.exe', path: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' }, { name: 'svchost.exe', path: 'C:\\Windows\\System32\\svchost.exe', system: true }, { name: 'Code.exe', path: 'C:\\Users\\me\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe' }];
         case 'apps.installed': return [{ name: 'Steam', path: 'C:\\Program Files (x86)\\Steam\\steam.exe' }];
         case 'activity.list': return [{ app: 'C:\\Program Files\\Mozilla Firefox\\firefox.exe', target: 'Amsterdam Reality', targetId: 'a1', conns: 14, upload: 120000, download: 5400000, hosts: ['youtube.com', 'googlevideo.com'] }, { app: 'C:\\Windows\\explorer.exe', target: 'direct', conns: 2, upload: 2000, download: 9000, hosts: ['msn.com'] }];
-        case 'logs.tail': return 'time=2026-10-30T12:00:00 level=INFO msg="portico service starting"';
+        case 'logs.tail': return 'time=2026-10-30T12:00:00 level=INFO msg="kordo service starting"';
         case 'rules.upsert': { const r = Object.assign({ id: 'r' + Date.now() }, params); const i = st.rules.findIndex(x => x.id === r.id); i >= 0 ? st.rules[i] = r : st.rules.push(r); return r; }
         case 'rules.remove': st.rules = st.rules.filter(r => r.id !== params.id); return true;
         case 'profile.set': st.profile = params.profile; return true;
@@ -194,7 +194,7 @@ function applyStatus(st) {
 function explainError(msg) {
   const m = String(msg || '');
   if (/access is denied|отказано в доступе/i.test(m) && /tun/i.test(m))
-    return { title: 'Нет прав на создание туннеля', hint: 'Служба должна работать от имени SYSTEM. Переустановите её из консоли администратора: portico-svc.exe install.' };
+    return { title: 'Нет прав на создание туннеля', hint: 'Служба должна работать от имени SYSTEM. Переустановите её из консоли администратора: kordo-svc.exe install.' };
   if (/^configuration:/i.test(m))
     return { title: 'Ошибка в настройках', hint: m.replace(/^configuration:\s*/i, ''), go: 'settings' };
   if (/address already in use|only one usage of each socket/i.test(m))
@@ -239,10 +239,10 @@ function render() {
   pill.textContent = S.online ? 'служба на связи' : 'служба недоступна';
   const main = $('#main');
   if (!S.online) {
-    main.innerHTML = `<h1>Служба Portico недоступна</h1>
+    main.innerHTML = `<h1>Служба Kordo недоступна</h1>
       <p class="sub">Графический интерфейс работает без прав администратора и управляет системной службой.</p>
       <div class="card"><p>Установите и запустите службу от имени администратора:</p>
-      <pre class="mono">portico-svc.exe install</pre>
+      <pre class="mono">kordo-svc.exe install</pre>
       <p class="muted small">Окно подключится автоматически, как только служба станет доступна.</p></div>`;
     return;
   }
@@ -761,7 +761,7 @@ async function renderLogs(main) {
   $('#diag').onclick = async () => {
     const d = await guard(() => rpc('diagnostics.collect'));
     const text = JSON.stringify(d, null, 2);
-    if (isWails) await guard(() => Go.SaveText('portico-diagnostics.json', text), 'Сохранено');
+    if (isWails) await guard(() => Go.SaveText('kordo-diagnostics.json', text), 'Сохранено');
     else console.log(text);
   };
   load();
@@ -808,7 +808,7 @@ function bindEvents() {
   on('rpc:child.ask', (raw) => {
     const a = typeof raw === 'string' ? JSON.parse(raw) : raw;
     S.asks.push(a);
-    if (isWails) Go.Notify('Portico', `${base(a.parentPath)} запустил ${base(a.childPath)}`);
+    if (isWails) Go.Notify('Kordo', `${base(a.parentPath)} запустил ${base(a.childPath)}`);
     if (!$('#modal-root').innerHTML) showAsk(a);
     if (S.view === 'home') render();
   });
@@ -836,7 +836,7 @@ function bindEvents() {
     }, 1500);
   } else if (inWebView) {
     // bridge missing: never show mock data inside the app
-    $("#main").innerHTML = "<h1>Не удалось инициализировать интерфейс</h1><p class=\"sub\">Мост Wails недоступен. Перезапустите Portico.</p>";
+    $("#main").innerHTML = "<h1>Не удалось инициализировать интерфейс</h1><p class=\"sub\">Мост Wails недоступен. Перезапустите Kordo.</p>";
   } else {
     S.online = true;
     await loadAll();

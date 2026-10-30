@@ -1,6 +1,6 @@
 //go:build windows
 
-// Package service is the privileged Portico service: it owns the store, the
+// Package service is the privileged Kordo service: it owns the store, the
 // engine (sing-box as a library), the supervisor, the kill switch, the process
 // tracker and the named-pipe RPC endpoint used by the GUI and CLI.
 package service
@@ -23,18 +23,18 @@ import (
 	"github.com/Microsoft/go-winio"
 	"golang.org/x/sys/windows"
 
-	"github.com/portico-vpn/portico/core/configgen"
-	"github.com/portico-vpn/portico/core/model"
-	"github.com/portico-vpn/portico/core/proctree"
-	"github.com/portico-vpn/portico/core/providers"
-	_ "github.com/portico-vpn/portico/core/providers/all"
-	"github.com/portico-vpn/portico/core/rpcapi"
-	"github.com/portico-vpn/portico/core/supervisor"
-	"github.com/portico-vpn/portico/engine"
-	"github.com/portico-vpn/portico/windows/killswitch"
-	"github.com/portico-vpn/portico/windows/netmon"
-	"github.com/portico-vpn/portico/windows/procs"
-	"github.com/portico-vpn/portico/windows/store"
+	"github.com/kordo-vpn/kordo/core/configgen"
+	"github.com/kordo-vpn/kordo/core/model"
+	"github.com/kordo-vpn/kordo/core/proctree"
+	"github.com/kordo-vpn/kordo/core/providers"
+	_ "github.com/kordo-vpn/kordo/core/providers/all"
+	"github.com/kordo-vpn/kordo/core/rpcapi"
+	"github.com/kordo-vpn/kordo/core/supervisor"
+	"github.com/kordo-vpn/kordo/engine"
+	"github.com/kordo-vpn/kordo/windows/killswitch"
+	"github.com/kordo-vpn/kordo/windows/netmon"
+	"github.com/kordo-vpn/kordo/windows/procs"
+	"github.com/kordo-vpn/kordo/windows/store"
 )
 
 var Version = "0.1.0-dev"
@@ -71,16 +71,16 @@ type pendingAsk struct {
 	rpcapi.ChildAsk
 }
 
-// DefaultDataDir is %ProgramData%\Portico; PORTICO_DATA overrides it (development).
+// DefaultDataDir is %ProgramData%\Kordo; KORDO_DATA overrides it (development).
 func DefaultDataDir() string {
-	if d := os.Getenv("PORTICO_DATA"); d != "" {
+	if d := os.Getenv("KORDO_DATA"); d != "" {
 		return d
 	}
 	pd := os.Getenv("ProgramData")
 	if pd == "" {
 		pd = `C:\ProgramData`
 	}
-	return filepath.Join(pd, "Portico")
+	return filepath.Join(pd, "Kordo")
 }
 
 // New prepares directories, logging and the store. It does not start anything.
@@ -93,7 +93,7 @@ func New(dataDir string, console bool) (*Service, error) {
 		asks:       map[string]pendingAsk{},
 		askedPaths: map[string]time.Time{},
 	}
-	if os.Getenv("PORTICO_DATA") == "" {
+	if os.Getenv("KORDO_DATA") == "" {
 		// production: only SYSTEM and Administrators may read the store
 		if err := store.SecureDir(dataDir); err != nil {
 			return nil, fmt.Errorf("prepare %s: %w", dataDir, err)
@@ -104,7 +104,7 @@ func New(dataDir string, console bool) (*Service, error) {
 			return nil, err
 		}
 	}
-	if os.Getenv("PORTICO_DATA") == "" {
+	if os.Getenv("KORDO_DATA") == "" {
 		_ = store.ReadableDir(s.logDir)
 	}
 	// A crash of the service (panic, fatal error) is written here; otherwise
@@ -126,6 +126,9 @@ func New(dataDir string, console bool) (*Service, error) {
 		return nil, err
 	}
 	s.selfExe = exe
+	if os.Getenv("KORDO_DATA") == "" {
+		s.migrateFromPortico()
+	}
 	st, err := store.Open(filepath.Join(dataDir, "state.json"), store.DPAPI{})
 	if err != nil {
 		return nil, err
@@ -140,7 +143,7 @@ func New(dataDir string, console bool) (*Service, error) {
 
 // Run starts all components and blocks until ctx is done.
 func (s *Service) Run(ctx context.Context) error {
-	s.log.Info("portico service starting", "version", Version, "engine", EngineVersion, "data", s.DataDir)
+	s.log.Info("kordo service starting", "version", Version, "engine", EngineVersion, "data", s.DataDir)
 
 	fw, err := killswitch.Open(s.log)
 	if err != nil {
@@ -194,7 +197,7 @@ func (s *Service) Run(ctx context.Context) error {
 	}
 
 	<-ctx.Done()
-	s.log.Info("portico service stopping")
+	s.log.Info("kordo service stopping")
 	l.Close()
 	s.stopWatcher()
 	// Note: kill-switch filters are intentionally left in place.
@@ -484,3 +487,27 @@ func (s *Service) afterChange() {
 }
 
 func newID() string { return store.NewID() }
+
+// migrateFromPortico copies servers, rules and settings from the data folder
+// the app used before it was renamed (Portico → Kordo). It runs once: only
+// when Kordo has no state yet. Secrets stay readable because the DPAPI
+// entropy kept its original value.
+func (s *Service) migrateFromPortico() {
+	newState := filepath.Join(s.DataDir, "state.json")
+	if _, err := os.Stat(newState); err == nil {
+		return
+	}
+	oldDir := filepath.Join(filepath.Dir(s.DataDir), "Portico")
+	data, err := os.ReadFile(filepath.Join(oldDir, "state.json"))
+	if err != nil {
+		return
+	}
+	if err := store.WriteFileAtomic(newState, data); err != nil {
+		s.log.Warn("migrate settings from Portico", "err", err)
+		return
+	}
+	if _, err := os.Stat(filepath.Join(oldDir, "connected.flag")); err == nil {
+		_ = os.WriteFile(s.flagPath(), []byte("1"), 0o644)
+	}
+	s.log.Info("settings migrated from Portico", "from", oldDir)
+}

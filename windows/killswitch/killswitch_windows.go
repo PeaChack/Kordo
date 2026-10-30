@@ -1,6 +1,6 @@
 //go:build windows
 
-// Package killswitch blocks traffic with WFP filters in Portico's own
+// Package killswitch blocks traffic with WFP filters in Kordo's own
 // provider and sublayer. Kill-switch filters are persistent: they survive a
 // crash of the service and a reboot, and are removed only by an explicit
 // Clear. DNS-leak filters (used while connected without a kill switch) are
@@ -61,7 +61,7 @@ type Firewall struct {
 }
 
 func Open(log *slog.Logger) (*Firewall, error) {
-	s, err := wf.New(&wf.Options{Name: "Portico", Description: "Portico kill switch", Dynamic: false})
+	s, err := wf.New(&wf.Options{Name: "Kordo", Description: "Kordo kill switch", Dynamic: false})
 	if err != nil {
 		return nil, fmt.Errorf("open WFP: %w", err)
 	}
@@ -90,7 +90,7 @@ func (f *Firewall) ensureObjects() error {
 		}
 	}
 	if !found {
-		if err := f.s.AddProvider(&wf.Provider{ID: providerID, Name: "Portico", Description: "Portico VPN client", Persistent: true}); err != nil {
+		if err := f.s.AddProvider(&wf.Provider{ID: providerID, Name: "Kordo", Description: "Kordo VPN client", Persistent: true}); err != nil {
 			return fmt.Errorf("add WFP provider: %w", err)
 		}
 	}
@@ -105,7 +105,7 @@ func (f *Firewall) ensureObjects() error {
 		}
 	}
 	if !found {
-		if err := f.s.AddSublayer(&wf.Sublayer{ID: sublayerID, Name: "Portico", Description: "Portico filters", Persistent: true, Provider: providerID, Weight: 0xFFFF}); err != nil {
+		if err := f.s.AddSublayer(&wf.Sublayer{ID: sublayerID, Name: "Kordo", Description: "Kordo filters", Persistent: true, Provider: providerID, Weight: 0xFFFF}); err != nil {
 			return fmt.Errorf("add WFP sublayer: %w", err)
 		}
 	}
@@ -148,7 +148,7 @@ func newRuleID() wf.RuleID {
 	return wf.RuleID(g)
 }
 
-// Apply replaces Portico's filters with ones derived from p. New filters are
+// Apply replaces Kordo's filters with ones derived from p. New filters are
 // added before old ones are removed, so there is never an unprotected gap.
 func (f *Firewall) Apply(p Policy) error {
 	f.mu.Lock()
@@ -181,7 +181,7 @@ func (f *Firewall) Apply(p Policy) error {
 	return errors.Join(errs...)
 }
 
-// Clear removes every Portico filter (explicit user action or uninstall).
+// Clear removes every Kordo filter (explicit user action or uninstall).
 func (f *Firewall) Clear() error { return f.Apply(Policy{Mode: Off}) }
 
 // Active reports whether persistent kill-switch filters are installed.
@@ -208,7 +208,7 @@ func build(p Policy) ([]*wf.Rule, error) {
 	var rules []*wf.Rule
 	add := func(name string, l layerPair, weight uint64, action wf.Action, conds ...*wf.Match) {
 		rules = append(rules, &wf.Rule{
-			ID: newRuleID(), Name: "Portico: " + name, Layer: l.layer, Sublayer: sublayerID,
+			ID: newRuleID(), Name: "Kordo: " + name, Layer: l.layer, Sublayer: sublayerID,
 			Provider: providerID, Weight: weight, Action: action, Conditions: conds, Persistent: persistent,
 		})
 	}

@@ -1,11 +1,11 @@
 //go:build windows
 
-// portico-svc is the privileged Portico service.
+// kordo-svc is the privileged Kordo service.
 //
-//	portico-svc install    install and start the Windows service (admin)
-//	portico-svc uninstall  stop and remove the service, remove firewall filters
-//	portico-svc run        run in the console (admin, for debugging)
-//	portico-svc start|stop control the installed service
+//	kordo-svc install    install and start the Windows service (admin)
+//	kordo-svc uninstall  stop and remove the service, remove firewall filters
+//	kordo-svc run        run in the console (admin, for debugging)
+//	kordo-svc start|stop control the installed service
 package main
 
 import (
@@ -19,14 +19,14 @@ import (
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
 
-	"github.com/portico-vpn/portico/windows/killswitch"
-	"github.com/portico-vpn/portico/windows/service"
+	"github.com/kordo-vpn/kordo/windows/killswitch"
+	"github.com/kordo-vpn/kordo/windows/service"
 )
 
 const (
-	serviceName = "PorticoSvc"
-	displayName = "Portico VPN Service"
-	description = "Per-application VPN routing (Portico). Runs the network engine, kill switch and process tracker."
+	serviceName = "KordoSvc"
+	displayName = "Kordo VPN Service"
+	description = "Per-application VPN routing (Kordo). Runs the network engine, kill switch and process tracker."
 )
 
 func main() {
@@ -56,7 +56,7 @@ func main() {
 	case "stop":
 		check(control(false))
 	default:
-		fmt.Println("usage: portico-svc install | uninstall | run | start | stop")
+		fmt.Println("usage: kordo-svc install | uninstall | run | start | stop")
 	}
 }
 

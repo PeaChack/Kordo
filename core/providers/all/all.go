@@ -2,7 +2,7 @@
 package all
 
 import (
-	_ "github.com/portico-vpn/portico/core/providers/shadowsocks"
-	_ "github.com/portico-vpn/portico/core/providers/vless"
-	_ "github.com/portico-vpn/portico/core/providers/wireguard"
+	_ "github.com/kordo-vpn/kordo/core/providers/shadowsocks"
+	_ "github.com/kordo-vpn/kordo/core/providers/vless"
+	_ "github.com/kordo-vpn/kordo/core/providers/wireguard"
 )

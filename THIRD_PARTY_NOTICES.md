@@ -1,6 +1,6 @@
 # Third-party notices
 
-Portico is licensed under **GPL-3.0-or-later** (see `LICENSE`). It embeds or
+Kordo is licensed under **GPL-3.0-or-later** (see `LICENSE`). It embeds or
 links the following components.
 
 ## sing-box — GPL-3.0-or-later (with additional terms)
@@ -9,13 +9,13 @@ Network engine, embedded as a Go library (version pinned in `go.mod`, 1.14.4).
 Source: https://github.com/SagerNet/sing-box
 
 The sing-box license adds a condition under GPL section 7: derivative works may
-not use the name "sing-box" or imply association with the project. Portico is
+not use the name "sing-box" or imply association with the project. Kordo is
 an independent project and is not affiliated with or endorsed by sing-box or
 SagerNet.
 
 ## Wintun — Prebuilt Binaries License
 
-Portico uses the unmodified, signed `wintun.dll` from https://www.wintun.net,
+Kordo uses the unmodified, signed `wintun.dll` from https://www.wintun.net,
 embedded by the `sing-tun` library and loaded from memory. Wintun is
 distributed under the Wintun Prebuilt Binaries License, which permits
 redistribution of the unmodified binary only. Wintun source code is

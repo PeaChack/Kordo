@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portico-vpn/portico/core/configgen"
-	"github.com/portico-vpn/portico/core/configgen/cgtest"
-	"github.com/portico-vpn/portico/core/model"
+	"github.com/kordo-vpn/kordo/core/configgen"
+	"github.com/kordo-vpn/kordo/core/configgen/cgtest"
+	"github.com/kordo-vpn/kordo/core/model"
 )
 
 var update = os.Getenv("UPDATE_GOLDEN") == "1"

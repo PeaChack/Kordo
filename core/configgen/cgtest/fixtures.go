@@ -5,10 +5,10 @@ import (
 	"net/netip"
 	"testing"
 
-	"github.com/portico-vpn/portico/core/configgen"
-	"github.com/portico-vpn/portico/core/model"
-	"github.com/portico-vpn/portico/core/providers"
-	_ "github.com/portico-vpn/portico/core/providers/all"
+	"github.com/kordo-vpn/kordo/core/configgen"
+	"github.com/kordo-vpn/kordo/core/model"
+	"github.com/kordo-vpn/kordo/core/providers"
+	_ "github.com/kordo-vpn/kordo/core/providers/all"
 )
 
 type Fixture struct {
@@ -31,7 +31,7 @@ func Fixtures(t testing.TB) map[string]Fixture {
 	ss := mustServer(t, "b2", "ss://2022-blake3-aes-128-gcm:8JCsPssfgS8tiRwiMlhARg%3D%3D@198.51.100.4:443#ss")
 	wg := mustServer(t, "c3", "[Interface]\nPrivateKey = yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=\nAddress = 10.66.0.2/32\n[Peer]\nPublicKey = xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=\nEndpoint = 192.0.2.10:51820\n")
 	env := configgen.Env{
-		RulesDir: `C:\ProgramData\Portico\rules`,
+		RulesDir: `C:\ProgramData\Kordo\rules`,
 		Resolved: map[string][]netip.Addr{"vpn.example.com": {netip.MustParseAddr("203.0.113.9")}},
 	}
 	only := model.DefaultProfile()

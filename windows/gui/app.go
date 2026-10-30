@@ -19,7 +19,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.org/x/sys/windows/registry"
 
-	"github.com/portico-vpn/portico/core/rpcapi"
+	"github.com/kordo-vpn/kordo/core/rpcapi"
 )
 
 // App is bound to the frontend. All service calls go through Call, which
@@ -118,7 +118,7 @@ func (a *App) Call(method string, params string) (string, error) {
 	c := a.client
 	a.mu.Unlock()
 	if c == nil {
-		return "", errors.New("служба Portico недоступна")
+		return "", errors.New("служба Kordo недоступна")
 	}
 	var p any
 	if params != "" {
@@ -194,7 +194,7 @@ func (a *App) GetAutostart() bool {
 		return false
 	}
 	defer k.Close()
-	_, _, err = k.GetStringValue("Portico")
+	_, _, err = k.GetStringValue("Kordo")
 	return err == nil
 }
 
@@ -204,8 +204,9 @@ func (a *App) SetAutostart(on bool) error {
 		return err
 	}
 	defer k.Close()
+	_ = k.DeleteValue("Portico") // entry left by the app before its rename
 	if !on {
-		err := k.DeleteValue("Portico")
+		err := k.DeleteValue("Kordo")
 		if errors.Is(err, registry.ErrNotExist) {
 			return nil
 		}
@@ -215,7 +216,7 @@ func (a *App) SetAutostart(on bool) error {
 	if err != nil {
 		return err
 	}
-	return k.SetStringValue("Portico", `"`+exe+`" --minimized`)
+	return k.SetStringValue("Kordo", `"`+exe+`" --minimized`)
 }
 
 // SaveText lets the user save diagnostics to a file.

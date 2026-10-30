@@ -14,6 +14,8 @@ import (
 // The store file itself is ACL-restricted to SYSTEM and Administrators.
 type DPAPI struct{}
 
+// The entropy keeps its original value: changing it would make secrets
+// stored before the rename (when the app was called Portico) unreadable.
 var entropy = []byte("portico-store-v1")
 
 func blob(b []byte) *windows.DataBlob {

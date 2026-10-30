@@ -1,4 +1,4 @@
-module github.com/portico-vpn/portico
+module github.com/kordo-vpn/kordo
 
 go 1.26.10
 

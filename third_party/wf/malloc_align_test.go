@@ -5,7 +5,7 @@ import (
 	"unsafe"
 )
 
-// Regression test for the Portico patch: allocations after an odd-sized blob
+// Regression test for the Kordo patch: allocations after an odd-sized blob
 // must stay pointer-aligned, otherwise writing a struct with pointers into
 // them aborts the Go 1.26 runtime.
 func TestArenaAlignment(t *testing.T) {

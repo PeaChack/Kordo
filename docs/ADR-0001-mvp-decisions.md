@@ -11,7 +11,7 @@
 - Process-правила сравнивают путь в sing-box **с учётом регистра** (`process_path`/`process_name` используют map), а пути Windows регистронезависимы. Поэтому каждое правило приложения выдаётся как `process_path_regex` с `(?i)`. Store-приложения матчатся regex'ом `\WindowsApps\<Package>_…\`, без версии.
 - Rule-set'ы раскладываются по «корзинам» (block, direct, по одной на каждый включённый сервер) × 3 уровня специфичности: t0 — явные path/store, t1 — явные name, t2 — выученные дети. Пустые rule-set'ы создаются всегда, поэтому добавление первого приложения к серверу не требует перезапуска.
 - `configgen.OnlyRuleSetsChanged` сравнивает два поколения. Если `config.json` побайтно не изменился, переписываются только файлы rule-set'ов (атомарно, через tmp + rename), и sing-box перечитывает их сам.
-- Обход #4341: `route.find_process: true` и служебное правило `process_name: __portico_sentinel__.exe → reject` присутствуют всегда.
+- Обход #4341: `route.find_process: true` и служебное правило `process_name: __kordo_sentinel__.exe → reject` присутствуют всегда.
 - `default_domain_resolver` — `local` (на Windows sing-box читает системные DNS-серверы и шлёт запросы через привязанный к физическому интерфейсу dialer, петли через TUN нет).
 - IP серверов, включая разрезолвленные службой домены, попадают в `route_exclude_address`. Резолв выполняется собственным DNS-клиентом службы (miekg/dns), поэтому он работает и при заблокированном kill switch системном DNS.
 - Если у аплинка нет глобального IPv6, TUN поднимается только с IPv4, DNS работает в режиме `ipv4_only`, а IPv6 получает reject. В режиме `ipv6: block` IPv6-адрес у TUN есть: трафик захватывается и отклоняется.
@@ -36,7 +36,7 @@
 - `ask`: уведомление `child.ask`. Ответ «как родитель» добавляет ребёнка в `Learned`, «напрямую» с «запомнить» пишет его в `ChildAnswers`.
 
 ## IPC
-- `\\.\pipe\portico`, JSON-RPC 2.0, по одному сообщению на строку. DACL: SYSTEM и Administrators — полный доступ, Interactive Users — чтение и запись. Служба логирует PID, сессию и exe клиента.
+- `\\.\pipe\kordo`, JSON-RPC 2.0, по одному сообщению на строку. DACL: SYSTEM и Administrators — полный доступ, Interactive Users — чтение и запись. Служба логирует PID, сессию и exe клиента.
 
 ## GUI
 - Wails v2.17 и фронтенд на чистом HTML/CSS/JS без сборщика: нет зависимости от npm, и есть мок-режим для превью в браузере. Мост к Go сделан на событиях Wails (`bridge:call` → `bridge:reply`, `windows/gui/bridge.go`): в production-сборке без Wails CLI сгенерированные привязки `window.go` приходят пустыми. Уведомления службы приходят событиями `rpc:*`.

@@ -1,6 +1,6 @@
 //go:build windows
 
-// Portico GUI. Runs without administrator rights and talks to the service
+// Kordo GUI. Runs without administrator rights and talks to the service
 // over the named pipe. Build: see build/build.ps1 (tags desktop,production).
 package main
 
@@ -25,7 +25,7 @@ func main() {
 	}
 	app := NewApp()
 	err = wails.Run(&options.App{
-		Title:     "Portico",
+		Title:     "Kordo",
 		Width:     1180,
 		Height:    760,
 		MinWidth:  900,
@@ -38,7 +38,7 @@ func main() {
 		OnShutdown:       app.shutdown,
 		DragAndDrop:      &options.DragAndDrop{EnableFileDrop: true, DisableWebViewDrop: true},
 		SingleInstanceLock: &options.SingleInstanceLock{
-			UniqueId:               "portico-gui-5b1f2c",
+			UniqueId:               "kordo-gui-5b1f2c",
 			OnSecondInstanceLaunch: app.onSecondInstance,
 		},
 		Bind: []interface{}{app},

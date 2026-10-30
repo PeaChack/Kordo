@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/portico-vpn/portico/core/configgen"
-	"github.com/portico-vpn/portico/core/configgen/cgtest"
-	"github.com/portico-vpn/portico/engine"
+	"github.com/kordo-vpn/kordo/core/configgen"
+	"github.com/kordo-vpn/kordo/core/configgen/cgtest"
+	"github.com/kordo-vpn/kordo/engine"
 )
 
 // TestGeneratedConfigsAreAccepted is the equivalent of `sing-box check` on

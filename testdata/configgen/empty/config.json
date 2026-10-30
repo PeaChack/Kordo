@@ -21,7 +21,7 @@
         "172.19.0.1/30"
       ],
       "auto_route": true,
-      "interface_name": "Portico",
+      "interface_name": "Kordo",
       "mtu": 9000,
       "stack": "mixed",
       "strict_route": true,
@@ -47,37 +47,37 @@
     "rule_set": [
       {
         "format": "source",
-        "path": "C:\\ProgramData\\Portico\\rules\\apps-block-t0.json",
+        "path": "C:\\ProgramData\\Kordo\\rules\\apps-block-t0.json",
         "tag": "apps-block-t0",
         "type": "local"
       },
       {
         "format": "source",
-        "path": "C:\\ProgramData\\Portico\\rules\\apps-direct-t0.json",
+        "path": "C:\\ProgramData\\Kordo\\rules\\apps-direct-t0.json",
         "tag": "apps-direct-t0",
         "type": "local"
       },
       {
         "format": "source",
-        "path": "C:\\ProgramData\\Portico\\rules\\apps-block-t1.json",
+        "path": "C:\\ProgramData\\Kordo\\rules\\apps-block-t1.json",
         "tag": "apps-block-t1",
         "type": "local"
       },
       {
         "format": "source",
-        "path": "C:\\ProgramData\\Portico\\rules\\apps-direct-t1.json",
+        "path": "C:\\ProgramData\\Kordo\\rules\\apps-direct-t1.json",
         "tag": "apps-direct-t1",
         "type": "local"
       },
       {
         "format": "source",
-        "path": "C:\\ProgramData\\Portico\\rules\\apps-block-t2.json",
+        "path": "C:\\ProgramData\\Kordo\\rules\\apps-block-t2.json",
         "tag": "apps-block-t2",
         "type": "local"
       },
       {
         "format": "source",
-        "path": "C:\\ProgramData\\Portico\\rules\\apps-direct-t2.json",
+        "path": "C:\\ProgramData\\Kordo\\rules\\apps-direct-t2.json",
         "tag": "apps-direct-t2",
         "type": "local"
       }
@@ -98,7 +98,7 @@
       {
         "action": "reject",
         "process_name": [
-          "__portico_sentinel__.exe"
+          "__kordo_sentinel__.exe"
         ]
       },
       {

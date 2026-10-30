@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/portico-vpn/portico/core/model"
+	"github.com/kordo-vpn/kordo/core/model"
 )
 
-const PipeName = `\\.\pipe\portico`
+const PipeName = `\\.\pipe\kordo`
 
 // Method names.
 const (

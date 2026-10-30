@@ -1,4 +1,4 @@
-// Package configgen turns a Portico profile into a sing-box configuration plus
+// Package configgen turns a Kordo profile into a sing-box configuration plus
 // a set of local rule-set files. The output is deterministic so it can be
 // golden-tested and compared: if only rule-set files differ between two
 // generations, the running engine picks them up without a restart (sing-box
@@ -15,18 +15,18 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/portico-vpn/portico/core/model"
-	"github.com/portico-vpn/portico/core/providers"
+	"github.com/kordo-vpn/kordo/core/model"
+	"github.com/kordo-vpn/kordo/core/providers"
 )
 
 const (
 	TunTag      = "tun-in"
 	DirectTag   = "direct"
 	WGDirectTag = "wg-direct"
-	TunName     = "Portico"
+	TunName     = "Kordo"
 	TunAddr4    = "172.19.0.1/30"
 	TunAddr6    = "fdfe:dcba:9876::1/126"
-	SentinelExe = "__portico_sentinel__.exe"
+	SentinelExe = "__kordo_sentinel__.exe"
 	DefaultDoH  = "1.1.1.1"
 )
 

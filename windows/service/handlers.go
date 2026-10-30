@@ -14,14 +14,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portico-vpn/portico/core/configgen"
-	"github.com/portico-vpn/portico/core/model"
-	"github.com/portico-vpn/portico/core/providers"
-	"github.com/portico-vpn/portico/core/rpcapi"
-	"github.com/portico-vpn/portico/core/supervisor"
-	"github.com/portico-vpn/portico/engine"
-	"github.com/portico-vpn/portico/windows/killswitch"
-	"github.com/portico-vpn/portico/windows/procs"
+	"github.com/kordo-vpn/kordo/core/configgen"
+	"github.com/kordo-vpn/kordo/core/model"
+	"github.com/kordo-vpn/kordo/core/providers"
+	"github.com/kordo-vpn/kordo/core/rpcapi"
+	"github.com/kordo-vpn/kordo/core/supervisor"
+	"github.com/kordo-vpn/kordo/engine"
+	"github.com/kordo-vpn/kordo/windows/killswitch"
+	"github.com/kordo-vpn/kordo/windows/procs"
 )
 
 func decode[T any](params json.RawMessage) (T, error) {

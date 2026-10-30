@@ -45,7 +45,7 @@ func (a *arena) Alloc(length uintptr) unsafe.Pointer {
 	if length == 0 {
 		panic("can't allocate zero bytes")
 	}
-	// Portico patch: keep every allocation pointer-aligned. Without it a
+	// Kordo patch: keep every allocation pointer-aligned. Without it a
 	// struct containing pointers can land on an odd address after a byte
 	// blob (e.g. an app ID), and since Go 1.26 assigning to it makes the
 	// runtime abort with "bulkBarrierPreWrite: unaligned arguments".

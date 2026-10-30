@@ -1,4 +1,4 @@
-// Package model holds the platform-independent data model of Portico:
+// Package model holds the platform-independent data model of Kordo:
 // servers, per-application rules and the profile that ties them together.
 package model
 
@@ -149,7 +149,7 @@ func (m Match) ExeName() string {
 var forbiddenNames = map[string]bool{
 	"svchost.exe": true, "system": true, "system idle process": true, "lsass.exe": true,
 	"services.exe": true, "wininit.exe": true, "csrss.exe": true, "smss.exe": true,
-	"portico-svc.exe": true, "portico.exe": true, "porticoctl.exe": true,
+	"kordo-svc.exe": true, "kordo.exe": true, "kordoctl.exe": true,
 }
 
 func IsForbidden(m Match) bool {

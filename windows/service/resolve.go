@@ -11,7 +11,7 @@ import (
 
 	"github.com/miekg/dns"
 
-	"github.com/portico-vpn/portico/windows/netmon"
+	"github.com/kordo-vpn/kordo/windows/netmon"
 )
 
 // resolver looks up server domains to exclude them from the TUN. It speaks

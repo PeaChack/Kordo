@@ -1,6 +1,6 @@
 //go:build windows
 
-// porticoctl controls the Portico service from the command line.
+// kordoctl controls the Kordo service from the command line.
 package main
 
 import (
@@ -13,11 +13,11 @@ import (
 
 	"github.com/Microsoft/go-winio"
 
-	"github.com/portico-vpn/portico/core/model"
-	"github.com/portico-vpn/portico/core/rpcapi"
+	"github.com/kordo-vpn/kordo/core/model"
+	"github.com/kordo-vpn/kordo/core/rpcapi"
 )
 
-const usage = `usage: porticoctl <command> [args]
+const usage = `usage: kordoctl <command> [args]
 
   status                         engine state and server health
   connect | disconnect
@@ -45,7 +45,7 @@ func main() {
 	timeout := 2 * time.Second
 	conn, err := winio.DialPipe(rpcapi.PipeName, &timeout)
 	if err != nil {
-		fail(fmt.Errorf("cannot reach the Portico service (%v); is it installed and running?", err))
+		fail(fmt.Errorf("cannot reach the Kordo service (%v); is it installed and running?", err))
 	}
 	c := rpcapi.NewClient(conn, nil)
 	defer c.Close()

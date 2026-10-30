@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portico-vpn/portico/core/configgen"
+	"github.com/kordo-vpn/kordo/core/configgen"
 )
 
 type fakeEngine struct {

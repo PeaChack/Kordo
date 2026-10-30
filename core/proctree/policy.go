@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/portico-vpn/portico/core/configgen"
-	"github.com/portico-vpn/portico/core/model"
+	"github.com/kordo-vpn/kordo/core/configgen"
+	"github.com/kordo-vpn/kordo/core/model"
 )
 
 type Action string

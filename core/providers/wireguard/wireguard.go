@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/portico-vpn/portico/core/providers"
+	"github.com/kordo-vpn/kordo/core/providers"
 )
 
 type Params struct {
@@ -108,7 +108,7 @@ func parseConf(text string) (Params, error) {
 			p.MTU, _ = strconv.Atoi(v)
 		case "interface.dns", "interface.listenport", "interface.table", "interface.saveconfig",
 			"interface.preup", "interface.postup", "interface.predown", "interface.postdown":
-			// DNS is handled globally by Portico; scripts are never executed.
+			// DNS is handled globally by Kordo; scripts are never executed.
 		case "interface.jc", "interface.jmin", "interface.jmax", "interface.s1", "interface.s2",
 			"interface.h1", "interface.h2", "interface.h3", "interface.h4":
 			return p, errors.New("AmneziaWG configs are not supported by the engine")

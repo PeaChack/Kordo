@@ -1,4 +1,4 @@
-// Package store persists servers and the profile in %ProgramData%\Portico.
+// Package store persists servers and the profile in %ProgramData%\Kordo.
 // Server parameters (keys, UUIDs, passwords) are encrypted with DPAPI.
 package store
 
@@ -13,7 +13,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/portico-vpn/portico/core/model"
+	"github.com/kordo-vpn/kordo/core/model"
 )
 
 // Protector encrypts secrets (DPAPI on Windows; identity in tests).

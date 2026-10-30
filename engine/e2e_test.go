@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portico-vpn/portico/core/providers"
-	_ "github.com/portico-vpn/portico/core/providers/all"
-	"github.com/portico-vpn/portico/engine"
+	"github.com/kordo-vpn/kordo/core/providers"
+	_ "github.com/kordo-vpn/kordo/core/providers/all"
+	"github.com/kordo-vpn/kordo/engine"
 )
 
 func freePort(t *testing.T) int {
@@ -29,7 +29,7 @@ func freePort(t *testing.T) int {
 
 // TestProxyEndToEnd runs a real sing-box server inbound locally and sends an
 // HTTP request through the outbound produced by each provider, i.e. the exact
-// JSON Portico generates is exercised against a live peer.
+// JSON Kordo generates is exercised against a live peer.
 func TestProxyEndToEnd(t *testing.T) {
 	hits := 0
 	web := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
