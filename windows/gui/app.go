@@ -38,6 +38,7 @@ func NewApp() *App { return &App{stop: make(chan struct{})} }
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.startBridge()
+	a.enableAutostartOnce()
 	runtime.OnFileDrop(ctx, func(x, y int, paths []string) {
 		runtime.EventsEmit(ctx, "files:dropped", a.resolvePaths(paths))
 	})
@@ -240,4 +241,21 @@ func (a *App) Notify(title, body string) {
 func (a *App) ShowWindow() {
 	runtime.WindowUnminimise(a.ctx)
 	runtime.Show(a.ctx)
+}
+
+// enableAutostartOnce turns on "open at login" the first time Kordo runs for
+// this user. A marker remembers it, so if the user switches it off later it
+// stays off.
+func (a *App) enableAutostartOnce() {
+	k, _, err := registry.CreateKey(registry.CURRENT_USER, `Software\Kordo`, registry.QUERY_VALUE|registry.SET_VALUE)
+	if err != nil {
+		return
+	}
+	defer k.Close()
+	if _, _, err := k.GetIntegerValue("AutostartInitialized"); err == nil {
+		return
+	}
+	if err := a.SetAutostart(true); err == nil {
+		_ = k.SetDWordValue("AutostartInitialized", 1)
+	}
 }

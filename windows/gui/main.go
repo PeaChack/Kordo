@@ -8,6 +8,7 @@ import (
 	"embed"
 	"io/fs"
 	"log"
+	"os"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -24,12 +25,19 @@ func main() {
 		log.Fatal(err)
 	}
 	app := NewApp()
+	startState := options.Normal
+	for _, a := range os.Args[1:] {
+		if a == "--minimized" { // started by the login autostart entry
+			startState = options.Minimised
+		}
+	}
 	err = wails.Run(&options.App{
-		Title:     "Kordo",
-		Width:     1180,
-		Height:    760,
-		MinWidth:  900,
-		MinHeight: 600,
+		WindowStartState: startState,
+		Title:            "Kordo",
+		Width:            1180,
+		Height:           760,
+		MinWidth:         900,
+		MinHeight:        600,
 		AssetServer: &assetserver.Options{
 			Assets: frontend,
 		},

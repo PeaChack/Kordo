@@ -90,6 +90,7 @@ const pbtAPMResumeAutomatic = 0x12
 
 func (h *handler) Execute(args []string, req <-chan svc.ChangeRequest, status chan<- svc.Status) (bool, uint32) {
 	status <- svc.Status{State: svc.StartPending}
+	ensureImmediateStart()
 	s, err := service.New(service.DefaultDataDir(), false)
 	if err != nil {
 		return true, 1
@@ -145,7 +146,7 @@ func install() error {
 		DisplayName:      displayName,
 		Description:      description,
 		StartType:        mgr.StartAutomatic,
-		DelayedAutoStart: true,
+		DelayedAutoStart: false, // a delayed start leaves apps unrouted for ~2 minutes after boot
 		ServiceStartName: "LocalSystem",
 	})
 	if err != nil {
@@ -206,4 +207,27 @@ func control(start bool) error {
 	}
 	_, err = s.Control(svc.Stop)
 	return err
+}
+
+// ensureImmediateStart switches installs made by older versions from
+// "Automatic (Delayed Start)" to "Automatic". The service runs as SYSTEM, so
+// it may change its own configuration; failures are ignored.
+func ensureImmediateStart() {
+	m, err := mgr.Connect()
+	if err != nil {
+		return
+	}
+	defer m.Disconnect()
+	s, err := m.OpenService(serviceName)
+	if err != nil {
+		return
+	}
+	defer s.Close()
+	cfg, err := s.Config()
+	if err != nil || (cfg.StartType == mgr.StartAutomatic && !cfg.DelayedAutoStart) {
+		return
+	}
+	cfg.StartType = mgr.StartAutomatic
+	cfg.DelayedAutoStart = false
+	_ = s.UpdateConfig(cfg)
 }

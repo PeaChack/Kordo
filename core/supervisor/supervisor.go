@@ -76,17 +76,21 @@ type Status struct {
 }
 
 type Config struct {
-	HealthInterval time.Duration // default 30s
-	HealthTimeout  time.Duration // default 5s
-	NetDebounce    time.Duration // default 1.5s
-	BackoffMin     time.Duration // default 1s
-	BackoffMax     time.Duration // default 60s
-	FailsToReset   int           // default 2: close the failing server's connections
+	HealthInterval   time.Duration // default 30s
+	RecoveryInterval time.Duration // default 5s: probe interval while a server is down
+	HealthTimeout    time.Duration // default 5s
+	NetDebounce      time.Duration // default 1.5s
+	BackoffMin       time.Duration // default 1s
+	BackoffMax       time.Duration // default 60s
+	FailsToReset     int           // default 2: close the failing server's connections
 }
 
 func (c *Config) defaults() {
 	if c.HealthInterval == 0 {
 		c.HealthInterval = 30 * time.Second
+	}
+	if c.RecoveryInterval == 0 {
+		c.RecoveryInterval = 5 * time.Second
 	}
 	if c.HealthTimeout == 0 {
 		c.HealthTimeout = 10 * time.Second
@@ -405,17 +409,38 @@ func (s *Supervisor) kick() {
 
 func (s *Supervisor) healthLoop() {
 	defer close(s.stopped)
-	t := time.NewTicker(s.cfg.HealthInterval)
-	defer t.Stop()
 	for {
+		// While a server is down (e.g. right after boot, before Wi-Fi is up)
+		// probe every few seconds so recovery shows up quickly.
+		interval := s.cfg.HealthInterval
+		if s.anyUnhealthy() && s.cfg.RecoveryInterval < interval {
+			interval = s.cfg.RecoveryInterval
+		}
+		t := time.NewTimer(interval)
 		select {
 		case <-s.stop:
+			t.Stop()
 			return
 		case <-t.C:
 		case <-s.wake:
+			t.Stop()
 		}
 		s.checkOnce()
 	}
+}
+
+func (s *Supervisor) anyUnhealthy() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.eng == nil {
+		return false
+	}
+	for _, h := range s.health {
+		if !h.Healthy {
+			return true
+		}
+	}
+	return false
 }
 
 // CheckNow runs a health check synchronously (used by tests and "test server").

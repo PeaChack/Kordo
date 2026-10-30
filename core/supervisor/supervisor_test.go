@@ -200,3 +200,29 @@ func TestDisconnect(t *testing.T) {
 		t.Fatal("not stopped")
 	}
 }
+
+func TestRecoversQuicklyWhileServerDown(t *testing.T) {
+	h := &harness{failTag: map[string]bool{"srv-s1": true}}
+	h.s = New(Config{HealthInterval: time.Hour, RecoveryInterval: 20 * time.Millisecond, NetDebounce: 10 * time.Millisecond}, Hooks{
+		Build: func() (*configgen.Output, error) {
+			return &configgen.Output{Config: []byte{0}, RuleSets: map[string][]byte{}, OutboundTags: map[string]string{"s1": "srv-s1"}}, nil
+		},
+		Write: func(*configgen.Output, bool) error { return nil },
+		Start: func(*configgen.Output) (Engine, error) {
+			h.mu.Lock()
+			defer h.mu.Unlock()
+			e := &fakeEngine{fail: h.failTag}
+			h.engines = append(h.engines, e)
+			return e, nil
+		},
+		HealthURL: func(string) string { return "http://x" },
+	}, nil)
+	t.Cleanup(h.s.Shutdown)
+	_ = h.s.Connect()
+	waitFor(t, "degraded (boot, no network yet)", func() bool { return h.s.Status().State == StateDegraded })
+	h.engines[0].mu.Lock()
+	h.failTag["srv-s1"] = false // network came up
+	h.engines[0].mu.Unlock()
+	// with HealthInterval=1h only the fast recovery probing can get us here
+	waitFor(t, "connected", func() bool { return h.s.Status().State == StateConnected })
+}
