@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"time"
 
@@ -42,6 +43,7 @@ func main() {
 		}
 		return
 	}
+	englishErrors()
 	cmd := "help"
 	if len(os.Args) > 1 {
 		cmd = strings.ToLower(os.Args[1])
@@ -60,6 +62,18 @@ func main() {
 	default:
 		fmt.Println("usage: kordo-svc install | uninstall | run | start | stop")
 	}
+}
+
+// englishErrors makes Windows error texts in the command-line output English.
+// The installer logs this output and would show localized text garbled, since
+// it is UTF-8 and the log expects the ANSI code page. FormatMessage (used by
+// syscall.Errno.Error) follows the thread UI language, so the main goroutine
+// is pinned to this thread. English system messages are always present; if
+// not, Windows falls back to the user's language.
+func englishErrors() {
+	runtime.LockOSThread()
+	const enUS = 0x0409
+	_, _, _ = windows.NewLazySystemDLL("kernel32.dll").NewProc("SetThreadUILanguage").Call(enUS)
 }
 
 func fatal(err error) {

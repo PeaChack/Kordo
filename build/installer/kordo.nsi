@@ -115,12 +115,14 @@ Var SvcMode ; "" = no service yet, "same" = upgrade in place, "moved" = removed 
 !macro CLOSE_GUI un
 Function ${un}CloseGui
   DetailPrint "$(ClosingGui)"
-  nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /IM Kordo.exe'
+  ; system tools print localized text in the OEM code page, which the log
+  ; would show garbled, so their output is not logged
+  nsExec::Exec '"$SYSDIR\taskkill.exe" /IM Kordo.exe'
   Pop $0
   ${If} $0 == 0
     Sleep 2000
   ${EndIf}
-  nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM Kordo.exe'
+  nsExec::Exec '"$SYSDIR\taskkill.exe" /F /IM Kordo.exe'
   Pop $0
 FunctionEnd
 !macroend
@@ -192,7 +194,8 @@ Section "Kordo" SecMain
       nsExec::ExecToLog '"$PLUGINSDIR\kordo-svc.exe" stop'
       Pop $0
       ${If} $0 != 0
-        nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /F /IM kordo-svc.exe'
+        DetailPrint "taskkill /F /IM kordo-svc.exe"
+        nsExec::Exec '"$SYSDIR\taskkill.exe" /F /IM kordo-svc.exe'
         Pop $0
       ${EndIf}
       Sleep 1000 ; let the process exit and release its files
@@ -203,9 +206,10 @@ Section "Kordo" SecMain
       nsExec::ExecToLog '"$PLUGINSDIR\kordo-svc.exe" uninstall'
       Pop $0
       ${If} $0 != 0
-        nsExec::ExecToLog '"$SYSDIR\sc.exe" stop ${SVC}'
+        DetailPrint "sc stop ${SVC} && sc delete ${SVC}"
+        nsExec::Exec '"$SYSDIR\sc.exe" stop ${SVC}'
         Pop $0
-        nsExec::ExecToLog '"$SYSDIR\sc.exe" delete ${SVC}'
+        nsExec::Exec '"$SYSDIR\sc.exe" delete ${SVC}'
         Pop $0
       ${EndIf}
       ; the SCM drops the registration once every handle to it is closed
@@ -296,7 +300,7 @@ Section "-WebView2"
   DetailPrint "$(WebView2Skipped)"
   Return
 download:
-  nsExec::ExecToLog `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -UseBasicParsing -Uri '${WV2_URL}' -OutFile '$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe'"`
+  nsExec::Exec `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -UseBasicParsing -Uri '${WV2_URL}' -OutFile '$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe'"`
   Pop $0
   ${If} $0 == 0
     ExecWait '"$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe" /silent /install' $0
