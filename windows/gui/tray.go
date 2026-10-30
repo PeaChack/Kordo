@@ -37,12 +37,12 @@ type tray struct {
 }
 
 var stateText = map[string]string{
-	"off":        "отключено",
-	"connecting": "подключение…",
-	"connected":  "подключено",
-	"degraded":   "сервер недоступен",
-	"blocked":    "заблокировано kill switch",
-	"retrying":   "переподключение…",
+	"off":          "отключено",
+	"connecting":   "подключение…",
+	"connected":    "подключено",
+	"degraded":     "сервер недоступен",
+	"blocked":      "заблокировано kill switch",
+	"reconnecting": "переподключение…",
 }
 
 func (a *App) startTray(assets fs.FS) {
