@@ -81,6 +81,19 @@ func (a *App) dispatch(c bridgeCall) (res any, err error) {
 	case "Notify":
 		a.Notify(arg[string](c, 0), arg[string](c, 1))
 		return nil, nil
+	case "Version":
+		return a.Version(), nil
+	case "CheckUpdate":
+		return a.CheckUpdate()
+	case "InstallUpdate":
+		return nil, a.InstallUpdate()
+	case "OpenReleasePage":
+		a.OpenReleasePage(arg[string](c, 0))
+		return nil, nil
+	case "GetUpdateCheck":
+		return a.GetUpdateCheck(), nil
+	case "SetUpdateCheck":
+		return nil, a.SetUpdateCheck(arg[bool](c, 0))
 	case "ShowWindow":
 		a.ShowWindow()
 		return nil, nil

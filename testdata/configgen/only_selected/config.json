@@ -53,7 +53,7 @@
         "198.51.100.4/32",
         "203.0.113.9/32"
       ],
-      "stack": "mixed",
+      "stack": "gvisor",
       "strict_route": true,
       "tag": "tun-in",
       "type": "tun"

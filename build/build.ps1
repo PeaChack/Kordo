@@ -34,7 +34,7 @@ Write-Host '== kordoctl.exe' -ForegroundColor Cyan
 go build -trimpath -ldflags '-s -w' -o bin\kordoctl.exe .\cmd\kordoctl
 if ($LASTEXITCODE) { throw 'build failed' }
 Write-Host '== Kordo.exe (GUI)' -ForegroundColor Cyan
-go build -trimpath -tags 'desktop,production' -ldflags '-s -w -H windowsgui' -o bin\Kordo.exe .\windows\gui
+go build -trimpath -tags 'desktop,production' -ldflags "-s -w -H windowsgui -X main.appVersion=$version" -o bin\Kordo.exe .\windows\gui
 if ($LASTEXITCODE) { throw 'build failed' }
 
 Copy-Item LICENSE, THIRD_PARTY_NOTICES.md bin\ -Force

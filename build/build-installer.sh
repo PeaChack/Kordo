@@ -57,7 +57,7 @@ go build -trimpath -tags "$tags" -ldflags "$ld" -o bin/kordo-svc.exe ./cmd/kordo
 echo "== kordoctl.exe"
 go build -trimpath -ldflags '-s -w' -o bin/kordoctl.exe ./cmd/kordoctl
 echo "== Kordo.exe (GUI)"
-go build -trimpath -tags 'desktop,production' -ldflags '-s -w -H windowsgui' -o bin/Kordo.exe ./windows/gui
+go build -trimpath -tags 'desktop,production' -ldflags "-s -w -H windowsgui -X main.appVersion=$version" -o bin/Kordo.exe ./windows/gui
 cp LICENSE THIRD_PARTY_NOTICES.md bin/
 
 for f in bin/Kordo.exe bin/kordo-svc.exe bin/kordoctl.exe; do sign "$f"; done

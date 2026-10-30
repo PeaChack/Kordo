@@ -82,7 +82,8 @@ function makeGoBridge() {
     pending.set(id, { resolve, reject });
     window.runtime.EventsEmit("bridge:call", JSON.stringify({ id, fn, args }));
   });
-  const names = ["Call", "ServiceOnline", "PickExecutable", "Icons", "GetAutostart", "SetAutostart", "SaveText", "Notify", "ShowWindow"];
+  const names = ["Call", "ServiceOnline", "PickExecutable", "Icons", "GetAutostart", "SetAutostart", "SaveText", "Notify", "ShowWindow",
+    "Version", "CheckUpdate", "InstallUpdate", "OpenReleasePage", "GetUpdateCheck", "SetUpdateCheck"];
   return Object.fromEntries(names.map(n => [n, (...args) => call(n, ...args)]));
 }
 
@@ -715,10 +716,11 @@ function renderSettings(main) {
       ${row('IPv6', '', seg('ipv6', p.ipv6 || 'auto', [['auto', 'Авто', 'Блокируется, если у провайдера нет IPv6'], ['block', 'Блокировать']]))}
       ${row('Подключаться при запуске Windows', '', sw('connectOnStart', p.connectOnStart))}
       ${row('Открывать окно при входе', '', '<label class="switch"><input type="checkbox" id="gui-auto"><span></span></label>')}
+      ${row('Проверять обновления при запуске', `Версия ${esc(Upd.current || '—')}`, '<div class="row" style="gap:10px"><button class="btn sm" id="upd-check">Проверить сейчас</button><label class="switch"><input type="checkbox" id="upd-auto"><span></span></label></div>')}
     </div>
     <details class="card" style="margin-top:14px"><summary class="muted">Дополнительно</summary>
       ${row('Строгая маршрутизация', 'Защита от утечек DNS', sw('strictRoute', p.strictRoute))}
-      ${row('Стек TUN', '', seg('stack', p.stack || 'mixed', [['mixed', 'mixed'], ['system', 'system'], ['gvisor', 'gvisor']]))}
+      ${row('Стек TUN', '', seg('stack', p.stack || 'gvisor', [['gvisor', 'gvisor', 'По умолчанию: короткие очереди под нагрузкой'], ['mixed', 'mixed'], ['system', 'system']]))}
       ${row('Фильтры брандмауэра', 'Если пропал интернет после сбоя', '<button class="btn danger" id="fw-clear">Снять все</button>')}
     </details>`;
   const save = async (mut) => {
@@ -749,6 +751,59 @@ function renderSettings(main) {
   $('#fw-clear').onclick = () => guard(() => rpc('killswitch.clear'), 'Фильтры сняты').then(refreshStatus);
   const ga = $('#gui-auto');
   if (isWails) { Go.GetAutostart().then(v => ga.checked = v); ga.onchange = () => guard(() => Go.SetAutostart(ga.checked), 'Сохранено'); }
+  const ua = $('#upd-auto');
+  if (isWails) { Go.GetUpdateCheck().then(v => ua.checked = v); ua.onchange = () => guard(() => Go.SetUpdateCheck(ua.checked), 'Сохранено'); }
+  $('#upd-check').onclick = () => checkUpdates(true);
+}
+
+// ------------------------------------------------------------------ updates
+// The window asks GitHub for the latest release at start (and twice a day
+// while it runs); a newer one shows a box in the sidebar.
+const Upd = { current: '', info: null, later: false, busy: false };
+
+async function checkUpdates(manual) {
+  if (!isWails) { if (manual) toast('Проверка обновлений работает только в приложении'); return; }
+  try {
+    const info = await Go.CheckUpdate();
+    Upd.info = info;
+    if (manual) {
+      Upd.later = false;
+      if (info.available) toast(`Доступна версия ${info.latest}`, 'ok');
+      else if (!info.latest) toast('Это сборка для разработки, обновления не проверяются');
+      else toast(`Установлена последняя версия (${info.current})`, 'ok');
+    }
+  } catch (e) {
+    if (manual) toast(String(e.message || e), 'bad');
+  }
+  drawUpdateBox();
+}
+
+function drawUpdateBox() {
+  const box = $('#update-box');
+  const i = Upd.info;
+  if (!i || !i.available || Upd.later) { box.innerHTML = ''; box.className = ''; return; }
+  box.className = 'update-box';
+  box.innerHTML = `<b>Доступна версия ${esc(i.latest)}</b><div class="muted small">Установлена ${esc(i.current)}</div>
+    <div class="row"><button class="btn sm primary" id="upd-go" ${Upd.busy ? 'disabled' : ''}>${Upd.busy ? 'Загрузка…' : 'Обновить'}</button>
+    <a class="link small" id="upd-notes">Что нового</a><a class="link small" id="upd-later">Позже</a></div>`;
+  $('#upd-notes').onclick = () => Go.OpenReleasePage(i.url || '');
+  $('#upd-later').onclick = () => { Upd.later = true; drawUpdateBox(); };
+  $('#upd-go').onclick = async () => {
+    Upd.busy = true; drawUpdateBox();
+    try {
+      await Go.InstallUpdate();
+      toast('Установщик запущен', 'ok');
+    } catch (e) { toast(String(e.message || e), 'bad'); }
+    Upd.busy = false; drawUpdateBox();
+  };
+}
+
+async function initUpdates() {
+  if (!isWails) return;
+  try { Upd.current = await Go.Version(); } catch { }
+  const auto = async () => { if (await Go.GetUpdateCheck().catch(() => false)) checkUpdates(false); };
+  setTimeout(auto, 5000);
+  setInterval(auto, 12 * 3600 * 1000);
 }
 
 // ------------------------------------------------------------------ logs
@@ -843,6 +898,7 @@ function bindEvents() {
   if (isWails) Go = makeGoBridge();
   bindEvents();
   if (isWails) {
+    initUpdates();
     S.online = await Go.ServiceOnline();
     if (S.online) await loadAll(); else render();
     // events emitted before bindEvents() are lost: reconcile periodically
