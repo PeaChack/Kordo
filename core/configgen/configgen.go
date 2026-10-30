@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/netip"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -226,7 +225,7 @@ func Generate(p model.Profile, servers []model.Server, env Env) (*Output, error)
 				"type":   "local",
 				"tag":    tag,
 				"format": "source",
-				"path":   filepath.Join(env.RulesDir, file),
+				"path":   joinDir(env.RulesDir, file),
 			})
 			rr := map[string]any{"rule_set": []string{tag}}
 			switch b {
@@ -458,4 +457,14 @@ func Describe(o *Output) string {
 	}
 	sort.Strings(names)
 	return fmt.Sprintf("%d bytes config, non-empty rule-sets: %v", len(o.Config), names)
+}
+
+// joinDir joins a file name to dir using dir's own separator, so the output
+// is the same on every OS the config is generated on: Windows paths keep "\",
+// Unix paths (Android) keep "/".
+func joinDir(dir, file string) string {
+	if strings.Contains(dir, `\`) {
+		return strings.TrimRight(dir, `\`) + `\` + file
+	}
+	return strings.TrimRight(dir, "/") + "/" + file
 }

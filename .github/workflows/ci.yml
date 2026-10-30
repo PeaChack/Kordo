@@ -40,6 +40,22 @@ jobs:
       - name: go test
         run: go test -tags "$(tr -d '[:space:]' < build/tags.txt)" ./...
 
+  test-linux:
+    name: tests (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: go test
+        run: go test -tags "$(tr -d '[:space:]' < build/tags.txt)" ./...
+      - name: go vet (windows target)
+        run: |
+          tags="$(tr -d '[:space:]' < build/tags.txt)"
+          GOOS=windows go vet -tags "$tags" ./...
+          GOOS=windows go vet -tags desktop,production ./windows/gui
+
   installer:
     name: installer (cross-built on Linux)
     runs-on: ubuntu-latest
@@ -78,7 +94,7 @@ jobs:
   release:
     name: GitHub release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [test, installer]
+    needs: [test, test-linux, installer]
     runs-on: ubuntu-latest
     permissions:
       contents: write

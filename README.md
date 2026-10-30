@@ -141,7 +141,7 @@ docs/            ADR
 go test -tags with_gvisor,with_wireguard,with_utls,with_clash_api ./...
 ```
 
-Тесты гоняются на Windows: golden-конфиги содержат Windows-пути, а часть пакетов собирается только под Windows.
+Тесты проходят и на Linux, и на Windows; пакеты из `windows/` собираются только под Windows, на Linux их проверяет `GOOS=windows go vet`.
 
 `engine` прогоняет каждый сгенерированный конфиг через строгий парсер и конструктор sing-box: это эквивалент `sing-box check`. Golden-файлы обновляются так: `UPDATE_GOLDEN=1 go test ./core/...`.
 
