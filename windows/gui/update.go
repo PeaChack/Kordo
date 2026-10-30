@@ -132,6 +132,15 @@ func (a *App) InstallUpdate() error {
 		os.Remove(path)
 		return errors.New("контрольная сумма установщика не совпала, файл удалён")
 	}
+	// A signed build only installs signed updates: the SHA-256 file comes
+	// from the same release, so it guards against a broken download, not
+	// against a replaced release.
+	if selfSigned() {
+		if err := verifySignature(path); err != nil {
+			os.Remove(path)
+			return fmt.Errorf("у установщика нет действительной подписи, файл удалён: %w", err)
+		}
+	}
 	// ShellExecute (unlike CreateProcess) shows the UAC prompt the installer's
 	// manifest asks for.
 	verb, _ := windows.UTF16PtrFromString("open")

@@ -96,6 +96,19 @@ jobs:
             v="$base-dev.$GITHUB_RUN_NUMBER"
           fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
+      - name: Code signing (only if the repository has the secrets)
+        env:
+          SIGN_PFX_BASE64: ${{ secrets.SIGN_PFX_BASE64 }}
+          SIGN_PFX_PASSWORD: ${{ secrets.SIGN_PFX_PASSWORD }}
+        run: |
+          if [ -z "$SIGN_PFX_BASE64" ]; then echo "no certificate: building unsigned"; exit 0; fi
+          sudo apt-get install -y -q osslsigncode
+          echo "$SIGN_PFX_BASE64" | base64 -d > "$RUNNER_TEMP/sign.pfx"
+          {
+            echo "KORDO_PFX=$RUNNER_TEMP/sign.pfx"
+            echo "KORDO_PFX_PASSWORD=$SIGN_PFX_PASSWORD"
+            echo "KORDO_SIGN_CMD=$GITHUB_WORKSPACE/build/sign-osslsigncode.sh"
+          } >> "$GITHUB_ENV"
       - name: Build binaries and installer
         run: build/build-installer.sh "${{ steps.version.outputs.version }}"
       - uses: actions/upload-artifact@v4

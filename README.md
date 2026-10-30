@@ -72,19 +72,29 @@ build/build-installer.sh 0.3.0 # без аргумента берётся build/
 
 ### Подпись кода
 
-Подписи пока нет, но место под неё готово: если задать переменную `KORDO_SIGN_CMD`, `build-installer.sh` вызовет её с путём к файлу последним аргументом для каждого exe в `bin/`, для деинсталлятора и для самого установщика (через `!finalize`/`!uninstfinalize` NSIS). Команда должна подписать файл на месте. Например:
+Сейчас сборки не подписаны. Всё готово к подписи, не хватает только сертификата.
+
+**Как это работает.** Если задана переменная `KORDO_SIGN_CMD`, `build-installer.sh` вызывает её для каждого exe в `bin/`, для деинсталлятора и для самого установщика (через `!finalize`/`!uninstfinalize` NSIS), передавая путь к файлу последним аргументом. Для `osslsigncode` (Linux) есть готовая обёртка:
 
 ```bash
-# Linux, osslsigncode (обёртка, потому что osslsigncode пишет в новый файл)
-cat > sign.sh <<'SH'
-#!/bin/sh
-osslsigncode sign -pkcs12 cert.pfx -pass "$PFX_PASS" -h sha256 \
-  -t http://timestamp.digicert.com -in "$1" -out "$1.signed" && mv "$1.signed" "$1"
-SH
-KORDO_SIGN_CMD="$PWD/sign.sh" build/build-installer.sh 0.3.0
+KORDO_PFX=cert.pfx KORDO_PFX_PASSWORD=... \
+KORDO_SIGN_CMD="$PWD/build/sign-osslsigncode.sh" build/build-installer.sh 0.3.0
 ```
 
-На Windows подойдёт `signtool sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 /a`. В CI сертификат нужно положить в секреты репозитория и передать `KORDO_SIGN_CMD` в шаг сборки.
+На Windows подойдёт `signtool sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 /a`.
+
+**В CI** подпись включается сама, если в репозитории есть секреты (Settings → Secrets and variables → Actions):
+- `SIGN_PFX_BASE64` — сертификат `.pfx` в base64 (`base64 -w0 cert.pfx`);
+- `SIGN_PFX_PASSWORD` — пароль к нему.
+
+Без секретов сборка просто остаётся неподписанной.
+
+**Где взять сертификат:**
+- [SignPath Foundation](https://signpath.org) — бесплатно для open-source проектов, нужна заявка. Подписывают на своей стороне через GitHub Action; это потребует отдельного шага в CI вместо `.pfx`.
+- Обычный OV-сертификат для подписи кода (Certum, Sectigo и др.) — платно, от ~$100–300 в год. Подходит под секреты выше.
+- Azure Trusted Signing — дёшево, но доступен не во всех странах.
+
+**Обновления и подпись.** Если установленный Kordo подписан, встроенное обновление запустит только установщик с действительной подписью. Неподписанные сборки проверяют только SHA-256.
 
 ### CI и релизы
 
