@@ -96,10 +96,8 @@ LangString SvcFailed       ${LANG_RUSSIAN} "Не удалось запустит
 LangString SvcFailed       ${LANG_ENGLISH} "Could not start the ${SVC} service (code $0). See the install log. You can retry as administrator: kordo-svc.exe install"
 LangString SvcStuck        ${LANG_RUSSIAN} "Старая служба ${SVC} ещё не удалена (возможно, открыта оснастка «Службы»). Закройте её и нажмите «Повтор»."
 LangString SvcStuck        ${LANG_ENGLISH} "The old ${SVC} service is not removed yet (the Services console may be open). Close it and press Retry."
-LangString NoWebView2      ${LANG_RUSSIAN} "Не найден Microsoft Edge WebView2 Runtime — без него окно Kordo не откроется (служба работать будет).$\n$\nСкачать и установить его сейчас (около 2 МБ, загрузчик Microsoft)?"
-LangString NoWebView2      ${LANG_ENGLISH} "Microsoft Edge WebView2 Runtime was not found. Kordo's window needs it (the service works without it).$\n$\nDownload and install it now (about 2 MB, Microsoft bootstrapper)?"
-LangString WebView2Failed  ${LANG_RUSSIAN} "Не удалось установить WebView2 Runtime. Сейчас откроется страница загрузки: ${WV2_URL}"
-LangString WebView2Failed  ${LANG_ENGLISH} "Could not install WebView2 Runtime. The download page will open now: ${WV2_URL}"
+LangString NoWebView2      ${LANG_RUSSIAN} "Не найден Microsoft Edge WebView2 Runtime — без него окно Kordo не откроется (служба работать будет).$\n$\nСкачать установщик WebView2 с сайта Microsoft в браузере? Запустите его после загрузки."
+LangString NoWebView2      ${LANG_ENGLISH} "Microsoft Edge WebView2 Runtime was not found. Kordo's window needs it (the service works without it).$\n$\nDownload the WebView2 installer from Microsoft in your browser? Run it once downloaded."
 LangString WebView2Skipped ${LANG_RUSSIAN} "ВНИМАНИЕ: WebView2 Runtime не установлен. Скачайте его: ${WV2_URL}"
 LangString WebView2Skipped ${LANG_ENGLISH} "WARNING: WebView2 Runtime is not installed. Get it at ${WV2_URL}"
 LangString RemoveData      ${LANG_RUSSIAN} "Удалить настройки и серверы Kordo ($APPDATA\Kordo)?$\n$\nЕсли собираетесь поставить Kordo снова, выберите «Нет»."
@@ -296,20 +294,12 @@ Section "-WebView2"
   ${AndIf} $0 != "0.0.0.0"
     Return
   ${EndIf}
-  MessageBox MB_YESNO|MB_ICONEXCLAMATION "$(NoWebView2)" /SD IDNO IDYES download
+  ; The installer does not download or run anything itself: a "download and
+  ; run" step looks like a dropper to antivirus heuristics. The link starts
+  ; the download of Microsoft's bootstrapper in the user's browser.
   DetailPrint "$(WebView2Skipped)"
-  Return
-download:
-  nsExec::Exec `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -UseBasicParsing -Uri '${WV2_URL}' -OutFile '$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe'"`
-  Pop $0
-  ${If} $0 == 0
-    ExecWait '"$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe" /silent /install' $0
-  ${EndIf}
-  ${If} $0 != 0
-    DetailPrint "$(WebView2Failed)"
-    MessageBox MB_ICONEXCLAMATION "$(WebView2Failed)" /SD IDOK
-    Exec '"$WINDIR\explorer.exe" "${WV2_URL}"'
-  ${EndIf}
+  MessageBox MB_YESNO|MB_ICONEXCLAMATION "$(NoWebView2)" /SD IDNO IDNO +2
+  Exec '"$WINDIR\explorer.exe" "${WV2_URL}"'
 SectionEnd
 
 ; ---------------------------------------------------------------- uninstall
