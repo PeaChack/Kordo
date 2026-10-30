@@ -1,0 +1,32 @@
+{
+  "json": {
+    "packet_encoding": "xudp",
+    "server": "203.0.113.7",
+    "server_port": 8443,
+    "tag": "srv-test",
+    "tls": {
+      "enabled": true,
+      "server_name": "cdn.example.org"
+    },
+    "transport": {
+      "headers": {
+        "Host": "cdn.example.org"
+      },
+      "path": "/ws",
+      "type": "ws"
+    },
+    "type": "vless",
+    "uuid": "bf000d23-0752-40b4-affe-68f7707a9661"
+  },
+  "kind": "outbound",
+  "params": {
+    "server": "203.0.113.7",
+    "port": 8443,
+    "uuid": "bf000d23-0752-40b4-affe-68f7707a9661",
+    "security": "tls",
+    "sni": "cdn.example.org",
+    "transport": "ws",
+    "path": "/ws",
+    "host": "cdn.example.org"
+  }
+}

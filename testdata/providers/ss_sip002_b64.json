@@ -1,0 +1,17 @@
+{
+  "json": {
+    "method": "aes-256-gcm",
+    "password": "password",
+    "server": "198.51.100.4",
+    "server_port": 8388,
+    "tag": "srv-test",
+    "type": "shadowsocks"
+  },
+  "kind": "outbound",
+  "params": {
+    "server": "198.51.100.4",
+    "port": 8388,
+    "method": "aes-256-gcm",
+    "password": "password"
+  }
+}

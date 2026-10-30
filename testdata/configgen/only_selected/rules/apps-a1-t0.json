@@ -1,0 +1,10 @@
+{
+  "rules": [
+    {
+      "process_path_regex": [
+        "(?i)^C:\\\\Program Files\\\\Mozilla Firefox\\\\firefox\\.exe$"
+      ]
+    }
+  ],
+  "version": 3
+}

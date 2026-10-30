@@ -1,0 +1,6 @@
+/bin/
+/dist/
+*.exe
+windows/gui/build/bin/
+node_modules/
+*.syso

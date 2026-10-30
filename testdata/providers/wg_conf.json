@@ -1,0 +1,42 @@
+{
+  "json": {
+    "address": [
+      "10.66.0.2/32",
+      "fd00::2/128"
+    ],
+    "mtu": 1420,
+    "peers": [
+      {
+        "address": "wg.example.com",
+        "allowed_ips": [
+          "0.0.0.0/0",
+          "::/0"
+        ],
+        "persistent_keepalive_interval": 15,
+        "port": 51820,
+        "pre_shared_key": "FpCyhws9cxwWoV4xELtfJvjJN+zQVRPISllRWgeopVE=",
+        "public_key": "xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg="
+      }
+    ],
+    "private_key": "yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=",
+    "tag": "srv-test",
+    "type": "wireguard"
+  },
+  "kind": "endpoint",
+  "params": {
+    "privateKey": "yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=",
+    "address": [
+      "10.66.0.2/32",
+      "fd00::2/128"
+    ],
+    "mtu": 1420,
+    "endpoint": "wg.example.com:51820",
+    "publicKey": "xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=",
+    "presharedKey": "FpCyhws9cxwWoV4xELtfJvjJN+zQVRPISllRWgeopVE=",
+    "allowedIps": [
+      "0.0.0.0/0",
+      "::/0"
+    ],
+    "keepalive": 15
+  }
+}

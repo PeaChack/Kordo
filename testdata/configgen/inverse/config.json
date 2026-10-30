@@ -1,0 +1,272 @@
+{
+  "dns": {
+    "final": "dns-remote",
+    "servers": [
+      {
+        "server": "9.9.9.9",
+        "tag": "dns-remote",
+        "type": "https"
+      },
+      {
+        "tag": "dns-local",
+        "type": "local"
+      }
+    ],
+    "strategy": "ipv4_only"
+  },
+  "endpoints": [
+    {
+      "address": [
+        "10.66.0.2/32"
+      ],
+      "mtu": 1408,
+      "peers": [
+        {
+          "address": "192.0.2.10",
+          "allowed_ips": [
+            "0.0.0.0/0",
+            "::/0"
+          ],
+          "persistent_keepalive_interval": 25,
+          "port": 51820,
+          "public_key": "xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg="
+        }
+      ],
+      "private_key": "yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=",
+      "tag": "srv-c3",
+      "type": "wireguard"
+    }
+  ],
+  "experimental": {
+    "clash_api": {
+      "external_controller": "127.0.0.1:19190",
+      "secret": "test-secret"
+    }
+  },
+  "inbounds": [
+    {
+      "address": [
+        "172.19.0.1/30",
+        "fdfe:dcba:9876::1/126"
+      ],
+      "auto_route": true,
+      "interface_name": "Portico",
+      "mtu": 9000,
+      "route_exclude_address": [
+        "192.0.2.10/32",
+        "203.0.113.9/32"
+      ],
+      "stack": "mixed",
+      "strict_route": true,
+      "tag": "tun-in",
+      "type": "tun"
+    }
+  ],
+  "log": {
+    "level": "info",
+    "timestamp": true
+  },
+  "outbounds": [
+    {
+      "tag": "direct",
+      "type": "direct"
+    },
+    {
+      "flow": "xtls-rprx-vision",
+      "packet_encoding": "xudp",
+      "server": "vpn.example.com",
+      "server_port": 443,
+      "tag": "srv-a1",
+      "tls": {
+        "enabled": true,
+        "reality": {
+          "enabled": true,
+          "public_key": "jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0",
+          "short_id": "0123abcd"
+        },
+        "server_name": "www.microsoft.com",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      },
+      "type": "vless",
+      "uuid": "bf000d23-0752-40b4-affe-68f7707a9661"
+    }
+  ],
+  "route": {
+    "auto_detect_interface": true,
+    "default_domain_resolver": "dns-local",
+    "final": "srv-c3",
+    "find_process": true,
+    "rule_set": [
+      {
+        "format": "source",
+        "path": "C:\\ProgramData\\Portico\\rules\\apps-block-t0.json",
+        "tag": "apps-block-t0",
+        "type": "local"
+      },
+      {
+        "format": "source",
+        "path": "C:\\ProgramData\\Portico\\rules\\apps-direct-t0.json",
+        "tag": "apps-direct-t0",
+        "type": "local"
+      },
+      {
+        "format": "source",
+        "path": "C:\\ProgramData\\Portico\\rules\\apps-a1-t0.json",
+        "tag": "apps-a1-t0",
+        "type": "local"
+      },
+      {
+        "format": "source",
+        "path": "C:\\ProgramData\\Portico\\rules\\apps-c3-t0.json",
+        "tag": "apps-c3-t0",
+        "type": "local"
+      },
+      {
+        "format": "source",
+        "path": "C:\\ProgramData\\Portico\\rules\\apps-block-t1.json",
+        "tag": "apps-block-t1",
+        "type": "local"
+      },
+      {
+        "format": "source",
+        "path": "C:\\ProgramData\\Portico\\rules\\apps-direct-t1.json",
+        "tag": "apps-direct-t1",
+        "type": "local"
+      },
+      {
+        "format": "source",
+        "path": "C:\\ProgramData\\Portico\\rules\\apps-a1-t1.json",
+        "tag": "apps-a1-t1",
+        "type": "local"
+      },
+      {
+        "format": "source",
+        "path": "C:\\ProgramData\\Portico\\rules\\apps-c3-t1.json",
+        "tag": "apps-c3-t1",
+        "type": "local"
+      },
+      {
+        "format": "source",
+        "path": "C:\\ProgramData\\Portico\\rules\\apps-block-t2.json",
+        "tag": "apps-block-t2",
+        "type": "local"
+      },
+      {
+        "format": "source",
+        "path": "C:\\ProgramData\\Portico\\rules\\apps-direct-t2.json",
+        "tag": "apps-direct-t2",
+        "type": "local"
+      },
+      {
+        "format": "source",
+        "path": "C:\\ProgramData\\Portico\\rules\\apps-a1-t2.json",
+        "tag": "apps-a1-t2",
+        "type": "local"
+      },
+      {
+        "format": "source",
+        "path": "C:\\ProgramData\\Portico\\rules\\apps-c3-t2.json",
+        "tag": "apps-c3-t2",
+        "type": "local"
+      }
+    ],
+    "rules": [
+      {
+        "action": "sniff"
+      },
+      {
+        "action": "hijack-dns",
+        "protocol": "dns"
+      },
+      {
+        "action": "hijack-dns",
+        "port": 53
+      },
+      {
+        "action": "reject",
+        "process_name": [
+          "__portico_sentinel__.exe"
+        ]
+      },
+      {
+        "action": "reject",
+        "ip_version": 6
+      },
+      {
+        "action": "reject",
+        "rule_set": [
+          "apps-block-t0"
+        ]
+      },
+      {
+        "outbound": "direct",
+        "rule_set": [
+          "apps-direct-t0"
+        ]
+      },
+      {
+        "outbound": "srv-a1",
+        "rule_set": [
+          "apps-a1-t0"
+        ]
+      },
+      {
+        "outbound": "srv-c3",
+        "rule_set": [
+          "apps-c3-t0"
+        ]
+      },
+      {
+        "action": "reject",
+        "rule_set": [
+          "apps-block-t1"
+        ]
+      },
+      {
+        "outbound": "direct",
+        "rule_set": [
+          "apps-direct-t1"
+        ]
+      },
+      {
+        "outbound": "srv-a1",
+        "rule_set": [
+          "apps-a1-t1"
+        ]
+      },
+      {
+        "outbound": "srv-c3",
+        "rule_set": [
+          "apps-c3-t1"
+        ]
+      },
+      {
+        "action": "reject",
+        "rule_set": [
+          "apps-block-t2"
+        ]
+      },
+      {
+        "outbound": "direct",
+        "rule_set": [
+          "apps-direct-t2"
+        ]
+      },
+      {
+        "outbound": "srv-a1",
+        "rule_set": [
+          "apps-a1-t2"
+        ]
+      },
+      {
+        "outbound": "srv-c3",
+        "rule_set": [
+          "apps-c3-t2"
+        ]
+      }
+    ]
+  }
+}

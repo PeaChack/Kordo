@@ -1,0 +1,148 @@
+{
+  "dns": {
+    "final": "dns-remote",
+    "servers": [
+      {
+        "server": "1.1.1.1",
+        "tag": "dns-remote",
+        "type": "https"
+      },
+      {
+        "tag": "dns-local",
+        "type": "local"
+      }
+    ],
+    "strategy": "ipv4_only"
+  },
+  "inbounds": [
+    {
+      "address": [
+        "172.19.0.1/30"
+      ],
+      "auto_route": true,
+      "interface_name": "Portico",
+      "mtu": 9000,
+      "stack": "mixed",
+      "strict_route": true,
+      "tag": "tun-in",
+      "type": "tun"
+    }
+  ],
+  "log": {
+    "level": "info",
+    "timestamp": true
+  },
+  "outbounds": [
+    {
+      "tag": "direct",
+      "type": "direct"
+    }
+  ],
+  "route": {
+    "auto_detect_interface": true,
+    "default_domain_resolver": "dns-local",
+    "final": "direct",
+    "find_process": true,
+    "rule_set": [
+      {
+        "format": "source",
+        "path": "C:\\ProgramData\\Portico\\rules\\apps-block-t0.json",
+        "tag": "apps-block-t0",
+        "type": "local"
+      },
+      {
+        "format": "source",
+        "path": "C:\\ProgramData\\Portico\\rules\\apps-direct-t0.json",
+        "tag": "apps-direct-t0",
+        "type": "local"
+      },
+      {
+        "format": "source",
+        "path": "C:\\ProgramData\\Portico\\rules\\apps-block-t1.json",
+        "tag": "apps-block-t1",
+        "type": "local"
+      },
+      {
+        "format": "source",
+        "path": "C:\\ProgramData\\Portico\\rules\\apps-direct-t1.json",
+        "tag": "apps-direct-t1",
+        "type": "local"
+      },
+      {
+        "format": "source",
+        "path": "C:\\ProgramData\\Portico\\rules\\apps-block-t2.json",
+        "tag": "apps-block-t2",
+        "type": "local"
+      },
+      {
+        "format": "source",
+        "path": "C:\\ProgramData\\Portico\\rules\\apps-direct-t2.json",
+        "tag": "apps-direct-t2",
+        "type": "local"
+      }
+    ],
+    "rules": [
+      {
+        "action": "sniff"
+      },
+      {
+        "action": "hijack-dns",
+        "protocol": "dns"
+      },
+      {
+        "action": "hijack-dns",
+        "port": 53
+      },
+      {
+        "action": "reject",
+        "process_name": [
+          "__portico_sentinel__.exe"
+        ]
+      },
+      {
+        "action": "reject",
+        "ip_version": 6
+      },
+      {
+        "ip_is_private": true,
+        "outbound": "direct"
+      },
+      {
+        "action": "reject",
+        "rule_set": [
+          "apps-block-t0"
+        ]
+      },
+      {
+        "outbound": "direct",
+        "rule_set": [
+          "apps-direct-t0"
+        ]
+      },
+      {
+        "action": "reject",
+        "rule_set": [
+          "apps-block-t1"
+        ]
+      },
+      {
+        "outbound": "direct",
+        "rule_set": [
+          "apps-direct-t1"
+        ]
+      },
+      {
+        "action": "reject",
+        "rule_set": [
+          "apps-block-t2"
+        ]
+      },
+      {
+        "outbound": "direct",
+        "rule_set": [
+          "apps-direct-t2"
+        ]
+      }
+    ]
+  }
+}

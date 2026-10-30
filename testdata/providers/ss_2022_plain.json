@@ -1,0 +1,17 @@
+{
+  "json": {
+    "method": "2022-blake3-aes-128-gcm",
+    "password": "8JCsPssfgS8tiRwiMlhARg==",
+    "server": "ss.example.net",
+    "server_port": 443,
+    "tag": "srv-test",
+    "type": "shadowsocks"
+  },
+  "kind": "outbound",
+  "params": {
+    "server": "ss.example.net",
+    "port": 443,
+    "method": "2022-blake3-aes-128-gcm",
+    "password": "8JCsPssfgS8tiRwiMlhARg=="
+  }
+}

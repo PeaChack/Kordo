@@ -1,0 +1,10 @@
+{
+  "rules": [
+    {
+      "process_path_regex": [
+        "(?i)^D:\\\\Games\\\\game\\.exe$"
+      ]
+    }
+  ],
+  "version": 3
+}
