@@ -13,8 +13,8 @@ import (
 
 	"github.com/Microsoft/go-winio"
 
-	"github.com/kordo-vpn/kordo/core/model"
-	"github.com/kordo-vpn/kordo/core/rpcapi"
+	"github.com/PeaChack/Kordo/core/model"
+	"github.com/PeaChack/Kordo/core/rpcapi"
 )
 
 const usage = `usage: kordoctl <command> [args]

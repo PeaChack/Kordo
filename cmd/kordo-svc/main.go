@@ -19,8 +19,8 @@ import (
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
 
-	"github.com/kordo-vpn/kordo/windows/killswitch"
-	"github.com/kordo-vpn/kordo/windows/service"
+	"github.com/PeaChack/Kordo/windows/killswitch"
+	"github.com/PeaChack/Kordo/windows/service"
 )
 
 const (

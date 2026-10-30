@@ -1,4 +1,4 @@
-module github.com/kordo-vpn/kordo
+module github.com/PeaChack/Kordo
 
 go 1.26.10
 

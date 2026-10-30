@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kordo-vpn/kordo/core/providers"
-	_ "github.com/kordo-vpn/kordo/core/providers/all"
-	"github.com/kordo-vpn/kordo/engine"
+	"github.com/PeaChack/Kordo/core/providers"
+	_ "github.com/PeaChack/Kordo/core/providers/all"
+	"github.com/PeaChack/Kordo/engine"
 )
 
 func freePort(t *testing.T) int {

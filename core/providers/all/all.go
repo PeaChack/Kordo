@@ -2,7 +2,7 @@
 package all
 
 import (
-	_ "github.com/kordo-vpn/kordo/core/providers/shadowsocks"
-	_ "github.com/kordo-vpn/kordo/core/providers/vless"
-	_ "github.com/kordo-vpn/kordo/core/providers/wireguard"
+	_ "github.com/PeaChack/Kordo/core/providers/shadowsocks"
+	_ "github.com/PeaChack/Kordo/core/providers/vless"
+	_ "github.com/PeaChack/Kordo/core/providers/wireguard"
 )

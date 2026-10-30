@@ -14,14 +14,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kordo-vpn/kordo/core/configgen"
-	"github.com/kordo-vpn/kordo/core/model"
-	"github.com/kordo-vpn/kordo/core/providers"
-	"github.com/kordo-vpn/kordo/core/rpcapi"
-	"github.com/kordo-vpn/kordo/core/supervisor"
-	"github.com/kordo-vpn/kordo/engine"
-	"github.com/kordo-vpn/kordo/windows/killswitch"
-	"github.com/kordo-vpn/kordo/windows/procs"
+	"github.com/PeaChack/Kordo/core/configgen"
+	"github.com/PeaChack/Kordo/core/model"
+	"github.com/PeaChack/Kordo/core/providers"
+	"github.com/PeaChack/Kordo/core/rpcapi"
+	"github.com/PeaChack/Kordo/core/supervisor"
+	"github.com/PeaChack/Kordo/engine"
+	"github.com/PeaChack/Kordo/windows/killswitch"
+	"github.com/PeaChack/Kordo/windows/procs"
 )
 
 func decode[T any](params json.RawMessage) (T, error) {

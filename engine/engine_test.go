@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/kordo-vpn/kordo/core/configgen"
-	"github.com/kordo-vpn/kordo/core/configgen/cgtest"
-	"github.com/kordo-vpn/kordo/engine"
+	"github.com/PeaChack/Kordo/core/configgen"
+	"github.com/PeaChack/Kordo/core/configgen/cgtest"
+	"github.com/PeaChack/Kordo/engine"
 )
 
 // TestGeneratedConfigsAreAccepted is the equivalent of `sing-box check` on

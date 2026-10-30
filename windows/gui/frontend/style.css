@@ -172,3 +172,6 @@ details.card summary { cursor: pointer; padding: 2px 0; }
 details.card[open] summary { margin-bottom: 6px; }
 .tabs a .muted { font-size: 11px; }
 .pill { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.chip-sel { border: 0; background: transparent; color: var(--accent-2); padding: 0 2px; font-size: 11px; cursor: pointer; max-width: 140px; }
+.chip-sel:hover { text-decoration: underline; }
+.chip-sel option { color: var(--text); background: var(--panel); }

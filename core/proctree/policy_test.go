@@ -3,7 +3,7 @@ package proctree
 import (
 	"testing"
 
-	"github.com/kordo-vpn/kordo/core/model"
+	"github.com/PeaChack/Kordo/core/model"
 )
 
 func TestDecide(t *testing.T) {

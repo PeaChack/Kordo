@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/kordo-vpn/kordo/core/configgen"
-	"github.com/kordo-vpn/kordo/core/model"
+	"github.com/PeaChack/Kordo/core/configgen"
+	"github.com/PeaChack/Kordo/core/model"
 )
 
 type Action string

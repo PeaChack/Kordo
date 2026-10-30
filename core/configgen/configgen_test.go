@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kordo-vpn/kordo/core/configgen"
-	"github.com/kordo-vpn/kordo/core/configgen/cgtest"
-	"github.com/kordo-vpn/kordo/core/model"
+	"github.com/PeaChack/Kordo/core/configgen"
+	"github.com/PeaChack/Kordo/core/configgen/cgtest"
+	"github.com/PeaChack/Kordo/core/model"
 )
 
 var update = os.Getenv("UPDATE_GOLDEN") == "1"

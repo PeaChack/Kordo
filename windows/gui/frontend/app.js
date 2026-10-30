@@ -477,10 +477,10 @@ function showServerDialog(existing) {
 
 // ------------------------------------------------------------------ apps
 function childDecisions(r) {
-  const out = (r.learned || []).map((l, i) => ({ name: base(l.match.value), path: l.match.value, target: targetLabel(l.target), kind: 'learned', i, ruleId: r.id }));
-  for (const a of (S.profile && S.profile.childAnswers) || []) {
-    if (a.ruleId === r.id) out.push({ name: base(a.match.value), path: a.match.value, target: 'Напрямую', kind: 'answer', key: (a.match.kind + ':' + a.match.value).toLowerCase() });
-  }
+  const out = (r.learned || []).map((l, i) => ({ name: base(l.match.value), path: l.match.value, tkey: targetKey(l.target), kind: 'learned', i, ruleId: r.id }));
+  (S.profile && S.profile.childAnswers || []).forEach((a, ai) => {
+    if (a.ruleId === r.id) out.push({ name: base(a.match.value), path: a.match.value, tkey: 'direct', kind: 'answer', ai, ruleId: r.id, key: (a.match.kind + ':' + a.match.value).toLowerCase() });
+  });
   return out;
 }
 
@@ -529,7 +529,7 @@ function drawRuleList() {
       <div style="min-width:0">
         <div class="name">${esc(ruleTitle(r))} ${r.match.kind !== 'path' ? `<span class="tag">${r.match.kind === 'name' ? 'по имени' : 'Store'}</span>` : ''}</div>
         <div class="path" title="${esc(r.match.value)}">${esc(r.match.value)}</div>
-        ${kids.length ? `<div class="learned">${kids.map(k => `<span class="chip" title="${esc(k.path)}">↳ ${esc(k.name)} <span class="muted">→ ${esc(k.target)}</span><button title="Забыть" ${k.kind === 'learned' ? `data-unlearn="${esc(k.ruleId)}" data-i="${k.i}"` : `data-forget="${esc(k.key)}"`}>×</button></span>`).join('')}</div>` : ''}
+        ${kids.length ? `<div class="learned">${kids.map(k => `<span class="chip" title="${esc(k.path)}">↳ ${esc(k.name)} <span class="muted">→</span><select class="chip-sel" title="Куда направить ${esc(k.name)}" data-kid-kind="${k.kind}" data-rule="${esc(k.ruleId)}" data-i="${k.kind === 'learned' ? k.i : k.ai}">${targetOptions(k.tkey)}</select><button title="Забыть" ${k.kind === 'learned' ? `data-unlearn="${esc(k.ruleId)}" data-i="${k.i}"` : `data-forget="${esc(k.key)}"`}>×</button></span>`).join('')}</div>` : ''}
       </div>
       <select data-target="${esc(r.id)}">${targetOptions(targetKey(r.target))}</select>
       <select data-children="${esc(r.id)}" title="Что делать с программами, которые запускает это приложение">
@@ -545,7 +545,24 @@ function drawRuleList() {
     const r = S.rules.find(r => r.id === b.dataset.unlearn);
     updateRule(r.id, { learned: r.learned.filter((_, i) => i !== +b.dataset.i) });
   });
-  $$('[data-forget]', box).forEach(b => b.onclick = async () => { await guard(() => rpc('children.forget', { key: b.dataset.forget })).catch(() => { }); loadAll(); });
+  $('[data-forget]', box).forEach(b => b.onclick = async () => { await guard(() => rpc('children.forget', { key: b.dataset.forget })).catch(() => { }); loadAll(); });
+  // Changing a child's route: learned children are edited in place; a
+  // "direct" answer becomes a learned child of the app with the new route.
+  $('.chip-sel', box).forEach(sel => sel.onchange = async () => {
+    const r = S.rules.find(r => r.id === sel.dataset.rule);
+    const target = keyTarget(sel.value);
+    if (sel.dataset.kidKind === 'learned') {
+      const learned = r.learned.map((l, i) => i === +sel.dataset.i ? Object.assign({}, l, { target, source: 'user' }) : l);
+      return updateRule(r.id, { learned });
+    }
+    if (target.kind === 'direct') return;
+    const a = S.profile.childAnswers[+sel.dataset.i];
+    try {
+      await rpc('children.forget', { key: (a.match.kind + ':' + a.match.value).toLowerCase() });
+      await rpc('rules.upsert', Object.assign({}, r, { learned: [...(r.learned || []), { match: a.match, target, source: 'user' }] }));
+    } catch (e) { toast(String(e.message || e), 'bad'); }
+    loadAll();
+  });
 }
 
 async function updateRule(id, patch) {

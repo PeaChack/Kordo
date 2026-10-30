@@ -15,8 +15,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/kordo-vpn/kordo/core/model"
-	"github.com/kordo-vpn/kordo/core/providers"
+	"github.com/PeaChack/Kordo/core/model"
+	"github.com/PeaChack/Kordo/core/providers"
 )
 
 const (

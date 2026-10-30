@@ -13,7 +13,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/kordo-vpn/kordo/core/model"
+	"github.com/PeaChack/Kordo/core/model"
 )
 
 // Protector encrypts secrets (DPAPI on Windows; identity in tests).

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/kordo-vpn/kordo/core/model"
+	"github.com/PeaChack/Kordo/core/model"
 )
 
 const PipeName = `\\.\pipe\kordo`

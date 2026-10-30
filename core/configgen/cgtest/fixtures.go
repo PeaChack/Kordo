@@ -5,10 +5,10 @@ import (
 	"net/netip"
 	"testing"
 
-	"github.com/kordo-vpn/kordo/core/configgen"
-	"github.com/kordo-vpn/kordo/core/model"
-	"github.com/kordo-vpn/kordo/core/providers"
-	_ "github.com/kordo-vpn/kordo/core/providers/all"
+	"github.com/PeaChack/Kordo/core/configgen"
+	"github.com/PeaChack/Kordo/core/model"
+	"github.com/PeaChack/Kordo/core/providers"
+	_ "github.com/PeaChack/Kordo/core/providers/all"
 )
 
 type Fixture struct {

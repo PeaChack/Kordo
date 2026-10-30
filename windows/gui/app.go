@@ -19,7 +19,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.org/x/sys/windows/registry"
 
-	"github.com/kordo-vpn/kordo/core/rpcapi"
+	"github.com/PeaChack/Kordo/core/rpcapi"
 )
 
 // App is bound to the frontend. All service calls go through Call, which

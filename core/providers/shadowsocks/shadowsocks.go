@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/kordo-vpn/kordo/core/providers"
+	"github.com/PeaChack/Kordo/core/providers"
 )
 
 type Params struct {

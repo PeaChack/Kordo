@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kordo-vpn/kordo/core/providers"
-	_ "github.com/kordo-vpn/kordo/core/providers/all"
+	"github.com/PeaChack/Kordo/core/providers"
+	_ "github.com/PeaChack/Kordo/core/providers/all"
 )
 
 var update = os.Getenv("UPDATE_GOLDEN") == "1"
