@@ -299,7 +299,10 @@ func Generate(p model.Profile, servers []model.Server, env Env) (*Output, error)
 	}
 	stack := p.Stack
 	if stack == "" {
-		stack = "mixed"
+		// gvisor keeps queues short under load: with "mixed" the Windows TCP
+		// stack buffered so much that latency rose from ~6 to ~130 ms while a
+		// download saturated the link, for direct apps too.
+		stack = "gvisor"
 	}
 	tun := map[string]any{
 		"type":           "tun",

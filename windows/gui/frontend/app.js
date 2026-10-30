@@ -718,7 +718,7 @@ function renderSettings(main) {
     </div>
     <details class="card" style="margin-top:14px"><summary class="muted">Дополнительно</summary>
       ${row('Строгая маршрутизация', 'Защита от утечек DNS', sw('strictRoute', p.strictRoute))}
-      ${row('Стек TUN', '', seg('stack', p.stack || 'mixed', [['mixed', 'mixed'], ['system', 'system'], ['gvisor', 'gvisor']]))}
+      ${row('Стек TUN', '', seg('stack', p.stack || 'gvisor', [['gvisor', 'gvisor', 'По умолчанию: короткие очереди под нагрузкой'], ['mixed', 'mixed'], ['system', 'system']]))}
       ${row('Фильтры брандмауэра', 'Если пропал интернет после сбоя', '<button class="btn danger" id="fw-clear">Снять все</button>')}
     </details>`;
   const save = async (mut) => {
