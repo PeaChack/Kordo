@@ -266,9 +266,26 @@ type Profile struct {
 	StrictRoute    bool      `json:"strictRoute"`
 	ConnectOnStart bool      `json:"connectOnStart"`
 	Stack          string    `json:"stack,omitempty"`      // tun stack: "gvisor" (default) | "mixed" | "system"
+	MTU            int       `json:"mtu,omitempty"`        // TUN MTU, 0 = DefaultMTU; clamped to 1280..9000
 	VerboseLog     bool      `json:"verboseLog,omitempty"` // engine logs every connection (slow with many connections)
 	Rules          []AppRule `json:"rules"`
 	ChildAnswers   []Learned `json:"childAnswers,omitempty"` // "always so" answers for shared children
+}
+
+// DefaultMTU is sing-box's default TUN MTU.
+const DefaultMTU = 9000
+
+// EffectiveMTU returns the TUN MTU to use.
+func (p Profile) EffectiveMTU() int {
+	switch {
+	case p.MTU == 0:
+		return DefaultMTU
+	case p.MTU < 1280: // IPv6 minimum
+		return 1280
+	case p.MTU > 9000:
+		return 9000
+	}
+	return p.MTU
 }
 
 func DefaultProfile() Profile {

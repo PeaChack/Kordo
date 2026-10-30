@@ -720,6 +720,7 @@ function renderSettings(main) {
     </div>
     <details class="card" style="margin-top:14px"><summary class="muted">Дополнительно</summary>
       ${row('Строгая маршрутизация', 'Защита от утечек DNS', sw('strictRoute', p.strictRoute))}
+      ${row('MTU туннеля', 'Если сайты зависают или соединения рвутся — попробуйте 1500 или 1280', seg('mtu', String(p.mtu || 9000), [['9000', '9000', 'По умолчанию'], ['1500', '1500', 'Как у обычной сети'], ['1280', '1280', 'Минимум, для «проблемных» сетей']]))}
       ${row('Стек TUN', '', seg('stack', p.stack || 'gvisor', [['gvisor', 'gvisor', 'По умолчанию: короткие очереди под нагрузкой'], ['mixed', 'mixed'], ['system', 'system']]))}
       ${row('Фильтры брандмауэра', 'Если пропал интернет после сбоя', '<button class="btn danger" id="fw-clear">Снять все</button>')}
     </details>`;
@@ -740,6 +741,7 @@ function renderSettings(main) {
       case 'dns': save(np => { np.dns.mode = v; }); break;
       case 'ipv6': save(np => { np.ipv6 = v; }); break;
       case 'stack': save(np => { np.stack = v; }); break;
+      case 'mtu': save(np => { np.mtu = v === '9000' ? 0 : Number(v); }); break;
     }
   }));
   $$('[data-sw]').forEach(cb => cb.onchange = () => save(np => { np[cb.dataset.sw] = cb.checked; }));

@@ -347,7 +347,7 @@ func Generate(p model.Profile, servers []model.Server, env Env) (*Output, error)
 		"tag":            TunTag,
 		"interface_name": TunName,
 		"address":        addrs,
-		"mtu":            9000,
+		"mtu":            p.EffectiveMTU(),
 		"auto_route":     true,
 		"strict_route":   p.StrictRoute,
 		"stack":          stack,
