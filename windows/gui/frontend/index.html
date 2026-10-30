@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Portico</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="logo.png" alt="" class="brand-logo">
+        <span class="brand-name">Portico</span>
+      </div>
+      <nav id="nav">
+        <a data-view="home" class="active"><span class="ico">⏻</span>Подключение</a>
+        <a data-view="servers"><span class="ico">◈</span>Серверы</a>
+        <a data-view="apps"><span class="ico">▦</span>Приложения</a>
+        <a data-view="activity"><span class="ico">⇅</span>Активность</a>
+        <a data-view="settings"><span class="ico">⚙</span>Настройки</a>
+        <a data-view="logs"><span class="ico">≡</span>Журнал</a>
+      </nav>
+      <div class="sidebar-foot">
+        <div id="svc-pill" class="pill pill-off">служба недоступна</div>
+      </div>
+    </aside>
+    <main id="main"></main>
+  </div>
+  <div id="modal-root"></div>
+  <div id="toasts"></div>
+  <script src="app.js"></script>
+</body>
+</html>

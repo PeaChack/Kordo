@@ -70,7 +70,11 @@ type pendingAsk struct {
 	rpcapi.ChildAsk
 }
 
+// DefaultDataDir is %ProgramData%\Portico; PORTICO_DATA overrides it (development).
 func DefaultDataDir() string {
+	if d := os.Getenv("PORTICO_DATA"); d != "" {
+		return d
+	}
 	pd := os.Getenv("ProgramData")
 	if pd == "" {
 		pd = `C:\ProgramData`
@@ -88,8 +92,11 @@ func New(dataDir string, console bool) (*Service, error) {
 		asks:       map[string]pendingAsk{},
 		askedPaths: map[string]time.Time{},
 	}
-	if err := store.SecureDir(dataDir); err != nil {
-		return nil, fmt.Errorf("prepare %s: %w", dataDir, err)
+	if os.Getenv("PORTICO_DATA") == "" {
+		// production: only SYSTEM and Administrators may read the store
+		if err := store.SecureDir(dataDir); err != nil {
+			return nil, fmt.Errorf("prepare %s: %w", dataDir, err)
+		}
 	}
 	for _, d := range []string{s.rulesDir, s.logDir} {
 		if err := os.MkdirAll(d, 0o755); err != nil {

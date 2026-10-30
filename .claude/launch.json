@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "gui-preview", "runtimeExecutable": "node", "runtimeArgs": ["build/devserver.js"], "port": 5178 }
+  ]
+}
