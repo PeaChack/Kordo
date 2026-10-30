@@ -175,3 +175,6 @@ details.card[open] summary { margin-bottom: 6px; }
 .chip-sel { border: 0; background: transparent; color: var(--accent-2); padding: 0 2px; font-size: 11px; cursor: pointer; max-width: 140px; }
 .chip-sel:hover { text-decoration: underline; }
 .chip-sel option { color: var(--text); background: var(--panel); }
+
+.update-box { padding: 10px; border-radius: 10px; border: 1px solid rgba(31,107,255,.45); background: rgba(31,107,255,.08); margin-bottom: 10px; font-size: 13px; }
+.update-box .row { gap: 8px; margin-top: 8px; flex-wrap: wrap; }
