@@ -183,7 +183,11 @@ func Generate(p model.Profile, servers []model.Server, env Env) (*Output, error)
 	var ruleSetDefs []any
 	var routeRules []any
 	routeRules = append(routeRules,
-		map[string]any{"action": "sniff"},
+		// TCP is not sniffed: sniffing waits for the client's first bytes
+		// (TLS ClientHello) before dialing, adding a full round trip to every
+		// new connection. Routing is by process, so domains are not needed;
+		// UDP sniffing is free (the first packet is already here).
+		map[string]any{"network": "udp", "action": "sniff"},
 		map[string]any{"protocol": "dns", "action": "hijack-dns"},
 		map[string]any{"port": 53, "action": "hijack-dns"},
 		// Workaround for sing-box #4341: keep a process rule present from the
@@ -280,6 +284,8 @@ func Generate(p model.Profile, servers []model.Server, env Env) (*Output, error)
 			map[string]any{"type": "local", "tag": "dns-local"},
 		},
 		"final": "dns-remote",
+		// lets the activity view show host names without sniffing
+		"reverse_mapping": true,
 	}
 	if !env.HasIPv6 || p.IPv6 == "block" {
 		dns["strategy"] = "ipv4_only"

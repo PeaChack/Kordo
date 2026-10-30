@@ -1,6 +1,7 @@
 {
   "dns": {
     "final": "dns-remote",
+    "reverse_mapping": true,
     "servers": [
       {
         "server": "1.1.1.1",
@@ -83,7 +84,8 @@
     ],
     "rules": [
       {
-        "action": "sniff"
+        "action": "sniff",
+        "network": "udp"
       },
       {
         "action": "hijack-dns",
