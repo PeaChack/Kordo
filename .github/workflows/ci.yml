@@ -56,6 +56,21 @@ jobs:
           GOOS=windows go vet -tags "$tags" ./...
           GOOS=windows go vet -tags desktop,production ./windows/gui
 
+  ui:
+    name: UI smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Install Playwright
+        run: |
+          npm install --no-save --no-package-lock playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: Run
+        run: node build/ui-smoke.js
+
   installer:
     name: installer (cross-built on Linux)
     runs-on: ubuntu-latest
@@ -94,7 +109,7 @@ jobs:
   release:
     name: GitHub release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [test, test-linux, installer]
+    needs: [test, test-linux, ui, installer]
     runs-on: ubuntu-latest
     permissions:
       contents: write

@@ -147,6 +147,8 @@ go test -tags with_gvisor,with_wireguard,with_utls,with_clash_api ./...
 
 Превью интерфейса в браузере с мок-данными: `node build/devserver.js`, затем откройте http://localhost:5178.
 
+Автотест интерфейса на тех же мок-данных (проходит все экраны и основные кнопки, падает на любой ошибке JS): `node build/ui-smoke.js` (нужен `playwright`, в CI ставится сам).
+
 ## Ограничения текущей версии
 
 См. [docs/ADR-0001-mvp-decisions.md](docs/ADR-0001-mvp-decisions.md). Кратко:
