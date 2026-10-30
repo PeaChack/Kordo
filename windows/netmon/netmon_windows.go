@@ -23,15 +23,15 @@ var (
 	active   *Monitor
 	activeMu sync.Mutex
 	cbIface  = windows.NewCallback(func(ctx uintptr, row unsafe.Pointer, typ uint32) uintptr {
-		dispatch("interface", row, 8)
+		dispatch("interface", row, unsafe.Offsetof(windows.MibIpInterfaceRow{}.InterfaceLuid))
 		return 0
 	})
 	cbRoute = windows.NewCallback(func(ctx uintptr, row unsafe.Pointer, typ uint32) uintptr {
-		dispatch("route", row, 0)
+		dispatch("route", row, unsafe.Offsetof(windows.MibIpForwardRow2{}.InterfaceLuid))
 		return 0
 	})
 	cbAddr = windows.NewCallback(func(ctx uintptr, row unsafe.Pointer, typ uint32) uintptr {
-		dispatch("address", row, 0)
+		dispatch("address", row, unsafe.Offsetof(windows.MibUnicastIpAddressRow{}.InterfaceLuid))
 		return 0
 	})
 )
@@ -45,7 +45,9 @@ func dispatch(reason string, row unsafe.Pointer, luidOffset uintptr) {
 	if m == nil {
 		return
 	}
-	if row != nil && luidOffset != 0 && m.ignore != nil {
+	// Events of our own TUN (its routes and addresses appear on every
+	// connect) are ignored, otherwise each connect would reset the engine.
+	if row != nil && m.ignore != nil {
 		luid := *(*uint64)(unsafe.Add(row, luidOffset))
 		if m.ignore(luid) {
 			return

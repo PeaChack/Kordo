@@ -89,7 +89,7 @@ func (c *Config) defaults() {
 		c.HealthInterval = 30 * time.Second
 	}
 	if c.HealthTimeout == 0 {
-		c.HealthTimeout = 5 * time.Second
+		c.HealthTimeout = 10 * time.Second
 	}
 	if c.NetDebounce == 0 {
 		c.NetDebounce = 1500 * time.Millisecond
@@ -486,9 +486,11 @@ func (s *Supervisor) checkOnce() {
 			}
 		}()
 	}
+	// One missed probe is noise (a slow DNS answer, a busy link); only a
+	// server that failed FailsToReset times in a row makes the state degraded.
 	allOK := true
 	for _, h := range s.health {
-		if !h.Healthy {
+		if !h.Healthy && h.Fails >= s.cfg.FailsToReset {
 			allOK = false
 		}
 	}

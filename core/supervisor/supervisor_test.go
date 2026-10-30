@@ -136,10 +136,13 @@ func TestHealthFailuresCloseOnlyThatServer(t *testing.T) {
 	h.failTag["srv-s2"] = true
 	h.mu.Unlock()
 	h.s.CheckNow()
-	if st := h.s.Status().State; st != StateDegraded {
-		t.Fatalf("after 1 fail: %s", st)
+	if st := h.s.Status().State; st != StateConnected {
+		t.Fatalf("one failed probe must not degrade the state, got %s", st)
 	}
 	h.s.CheckNow()
+	if st := h.s.Status().State; st != StateDegraded {
+		t.Fatalf("after 2 fails: %s", st)
+	}
 	waitFor(t, "connections closed", func() bool { return h.engines[0].closes.Load() == 1 })
 	h.engines[0].mu.Lock()
 	tags := append([]string(nil), h.engines[0].closedTags...)
