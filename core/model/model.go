@@ -165,6 +165,31 @@ var SharedExes = map[string]bool{
 	"node.exe": true, "python.exe": true, "pythonw.exe": true, "java.exe": true,
 	"javaw.exe": true, "msedgewebview2.exe": true, "rundll32.exe": true, "dllhost.exe": true,
 	"openconsole.exe": true, "windowsterminal.exe": true, "wscript.exe": true, "cscript.exe": true,
+	// developer tools started by IDEs, agents and terminals alike
+	"git.exe": true, "git-remote-https.exe": true, "git-remote-http.exe": true,
+	"bash.exe": true, "sh.exe": true, "ssh.exe": true, "curl.exe": true,
+	"wsl.exe": true, "wslhost.exe": true, "npm.exe": true, "npx.exe": true,
+}
+
+// PruneSharedLearned drops auto-learned children (Source "inherit") whose
+// executable is shared. Such entries could exist from before an exe was added
+// to SharedExes; routing them by path would capture every instance in the
+// system. Children the user decided on explicitly are kept. It reports how
+// many entries were removed.
+func PruneSharedLearned(p *Profile) int {
+	removed := 0
+	for i := range p.Rules {
+		kept := p.Rules[i].Learned[:0]
+		for _, l := range p.Rules[i].Learned {
+			if l.Source == "inherit" && SharedExes[l.Match.ExeName()] {
+				removed++
+				continue
+			}
+			kept = append(kept, l)
+		}
+		p.Rules[i].Learned = kept
+	}
+	return removed
 }
 
 // ChildPolicy decides what happens with processes started by a matched app.

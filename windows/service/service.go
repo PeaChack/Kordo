@@ -134,6 +134,14 @@ func New(dataDir string, console bool) (*Service, error) {
 		return nil, err
 	}
 	s.store = st
+	var pruned int
+	_ = st.Update(func(p *model.Profile, _ *[]model.Server) error {
+		pruned = model.PruneSharedLearned(p)
+		return nil
+	})
+	if pruned > 0 {
+		s.log.Info("removed auto-learned shared programs from app rules", "count", pruned)
+	}
 	s.resolver = newResolver(s.log)
 	var sec [16]byte
 	_, _ = rand.Read(sec[:])

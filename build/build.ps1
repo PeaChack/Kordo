@@ -6,7 +6,7 @@ $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
 $tags = (Get-Content "$root\build\tags.txt" -Raw).Trim()
-$version = '0.1.0'
+$version = '0.2.0'
 $ld = "-s -w -X github.com/kordo-vpn/kordo/windows/service.Version=$version"
 $winres = 'github.com/tc-hib/go-winres@v0.3.3'
 

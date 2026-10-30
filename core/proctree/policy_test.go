@@ -43,3 +43,30 @@ func TestDecide(t *testing.T) {
 		t.Fatalf("direct policy in inverse mode: %+v", d)
 	}
 }
+
+func TestSharedDevToolsAreAsked(t *testing.T) {
+	p := model.DefaultProfile()
+	p.Rules = []model.AppRule{{ID: "ide", Match: model.Match{Kind: model.MatchName, Value: "claude.exe"}, Target: model.ToServer("s1"), Children: model.ChildInherit}}
+	m := NewMatcher()
+	for _, child := range []string{`C:\Program Files\Git\cmd\git.exe`, `C:\Program Files\Git\usr\bin\bash.exe`, `C:\Program Files\Git\mingw64\libexec\git-core\git-remote-https.exe`} {
+		if d := m.Decide(p, `C:\x\claude.exe`, child); d.Action != ActAsk || !d.Shared {
+			t.Errorf("%s: got %+v, want ask (shared)", child, d)
+		}
+	}
+}
+
+func TestPruneSharedLearned(t *testing.T) {
+	p := model.DefaultProfile()
+	p.Rules = []model.AppRule{{ID: "r", Match: model.Match{Kind: model.MatchName, Value: "claude.exe"}, Target: model.ToServer("s1"),
+		Learned: []model.Learned{
+			{Match: model.Match{Kind: model.MatchPath, Value: `C:\Program Files\Git\cmd\git.exe`}, Source: "inherit"},
+			{Match: model.Match{Kind: model.MatchPath, Value: `C:\Program Files\Git\bin\bash.exe`}, Source: "user"},
+			{Match: model.Match{Kind: model.MatchPath, Value: `C:\Apps\idea64.exe`}, Source: "inherit"},
+		}}}
+	if n := model.PruneSharedLearned(&p); n != 1 {
+		t.Fatalf("removed %d, want 1", n)
+	}
+	if len(p.Rules[0].Learned) != 2 {
+		t.Fatalf("left %v", p.Rules[0].Learned)
+	}
+}
