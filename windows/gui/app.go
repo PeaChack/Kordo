@@ -253,9 +253,31 @@ func (a *App) enableAutostartOnce() {
 	}
 	defer k.Close()
 	if _, _, err := k.GetIntegerValue("AutostartInitialized"); err == nil {
+		a.refreshAutostartPath()
 		return
 	}
 	if err := a.SetAutostart(true); err == nil {
 		_ = k.SetDWordValue("AutostartInitialized", 1)
+	}
+}
+
+// refreshAutostartPath keeps an enabled "open at login" entry pointing at this
+// executable, e.g. after Kordo moved from a manual folder to Program Files.
+func (a *App) refreshAutostartPath() {
+	k, err := registry.OpenKey(registry.CURRENT_USER, runKey, registry.QUERY_VALUE)
+	if err != nil {
+		return
+	}
+	cur, _, err := k.GetStringValue("Kordo")
+	k.Close()
+	if err != nil {
+		return // autostart is off: leave it off
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	if !strings.EqualFold(cur, `"`+exe+`" --minimized`) {
+		_ = a.SetAutostart(true)
 	}
 }

@@ -18,28 +18,85 @@
 - **Активность:** экран «какое приложение куда ушло» (данные из Clash API ядра).
 - **Безопасность:** GUI работает без прав администратора. Всё привилегированное выполняет служба `LocalSystem`. Связь идёт через named pipe `\\.\pipe\kordo` с DACL. Параметры серверов зашифрованы DPAPI, папка `%ProgramData%\Kordo` доступна только SYSTEM и администраторам.
 
-## Сборка
+## Установка
 
-Нужен Go ≥ 1.25 (проверено на 1.26.10). CGO и Node.js не нужны: фронтенд написан на чистом HTML/JS без сборщика.
+Скачайте `Kordo-Setup-<версия>.exe` со страницы [Releases](https://github.com/PeaChack/Kordo/releases) (рядом лежит `.sha256`) и запустите. Нужны 64-битная Windows 10/11 и права администратора.
 
-```bash
-powershell -ExecutionPolicy Bypass -File build/build.ps1
-```
+Установщик:
+- кладёт `Kordo.exe`, `kordo-svc.exe`, `kordoctl.exe` в `%ProgramFiles%\Kordo`, добавляет ярлык в меню «Пуск» и запись в «Программы и компоненты»;
+- регистрирует и запускает службу `KordoSvc` (автозапуск, перезапуск при сбое);
+- при обновлении останавливает службу, закрывает окно Kordo, заменяет файлы и запускает службу снова. Если служба была зарегистрирована из другой папки (ручная установка из `bin\`), он удаляет её и регистрирует заново из Program Files. Запись автозапуска окна тоже переносится на новый путь;
+- проверяет Microsoft Edge WebView2 Runtime (на Windows 11 он есть) и, если его нет, предлагает скачать и поставить загрузчик Microsoft.
 
-Результат появится в `bin/`: `Kordo.exe` (GUI), `kordo-svc.exe` (служба), `kordoctl.exe` (CLI).
-Теги сборки ядра лежат в `build/tags.txt` (`with_gvisor,with_wireguard,with_utls,with_clash_api`).
+Удаление — через «Программы и компоненты» или `%ProgramFiles%\Kordo\uninstall.exe`. Сначала удаляется служба и снимаются все WFP-фильтры kill switch, потом файлы, ярлык и автозапуск. Настройки и серверы в `%ProgramData%\Kordo` по умолчанию остаются; деинсталлятор спросит, удалить ли их.
 
-## Установка и запуск
+Тихий режим: `Kordo-Setup-<версия>.exe /S`, удаление `uninstall.exe /S` (настройки при этом сохраняются).
+
+> Подписи кода пока нет, поэтому SmartScreen может предупредить о неизвестном издателе: «Подробнее» → «Выполнить в любом случае». Сверить файл можно по SHA-256 из релиза.
+
+### Ручная установка (для разработки)
 
 ```bash
 bin\kordo-svc.exe install
 ```
 
-Команду нужно запускать от имени администратора: она регистрирует службу `KordoSvc` (автозапуск, перезапуск при сбое) и сразу её запускает. После этого откройте `bin\Kordo.exe` (права администратора не нужны).
+Команду нужно запускать от имени администратора: она регистрирует службу `KordoSvc` и сразу её запускает. После этого откройте `bin\Kordo.exe` (права администратора не нужны). Если потом поставить Kordo установщиком, он сам перенесёт службу в Program Files.
 
-Отладочный запуск службы в консоли (тоже от администратора): `kordo-svc.exe run`. Удаление: `kordo-svc.exe uninstall` (заодно снимает все WFP-фильтры).
+Отладочный запуск службы в консоли (тоже от администратора): `kordo-svc.exe run`. Остановка с ожиданием: `kordo-svc.exe stop`. Удаление: `kordo-svc.exe uninstall` (заодно снимает все WFP-фильтры).
 
-### CLI
+## Сборка
+
+Нужен Go из `go.mod` (сейчас 1.26.10). CGO и Node.js не нужны: фронтенд написан на чистом HTML/JS без сборщика. Версия продукта лежит в `build/version.txt`, теги сборки ядра — в `build/tags.txt` (`with_gvisor,with_wireguard,with_utls,with_clash_api`).
+
+На Windows, только бинарники:
+
+```bash
+powershell -ExecutionPolicy Bypass -File build/build.ps1 [-Version 0.3.0]
+```
+
+Результат появится в `bin/`: `Kordo.exe` (GUI), `kordo-svc.exe` (служба), `kordoctl.exe` (CLI).
+
+### Установщик
+
+Установщик собирается на Linux (или macOS): бинарники кросс-компилируются (`GOOS=windows GOARCH=amd64`, без CGO), иконки и манифесты встраиваются через `go-winres`, затем [NSIS](https://nsis.sourceforge.io/) собирает `build/installer/kordo.nsi`.
+
+```bash
+sudo apt install nsis          # нужен makensis 3.08+
+build/build-installer.sh 0.3.0 # без аргумента берётся build/version.txt
+```
+
+Результат: `bin/*.exe` и `dist/Kordo-Setup-0.3.0.exe` + `.sha256`. Версия попадает в `service.Version`, в ресурсы exe и в установщик.
+
+### Подпись кода
+
+Подписи пока нет, но место под неё готово: если задать переменную `KORDO_SIGN_CMD`, `build-installer.sh` вызовет её с путём к файлу последним аргументом для каждого exe в `bin/`, для деинсталлятора и для самого установщика (через `!finalize`/`!uninstfinalize` NSIS). Команда должна подписать файл на месте. Например:
+
+```bash
+# Linux, osslsigncode (обёртка, потому что osslsigncode пишет в новый файл)
+cat > sign.sh <<'SH'
+#!/bin/sh
+osslsigncode sign -pkcs12 cert.pfx -pass "$PFX_PASS" -h sha256 \
+  -t http://timestamp.digicert.com -in "$1" -out "$1.signed" && mv "$1.signed" "$1"
+SH
+KORDO_SIGN_CMD="$PWD/sign.sh" build/build-installer.sh 0.3.0
+```
+
+На Windows подойдёт `signtool sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 /a`. В CI сертификат нужно положить в секреты репозитория и передать `KORDO_SIGN_CMD` в шаг сборки.
+
+### CI и релизы
+
+GitHub Actions (`.github/workflows/ci.yml`):
+- в каждом PR и на `main`: `gofmt`, `go vet` и `go test` на `windows-latest` (часть пакетов и golden-конфиги только для Windows), установщик собирается на `ubuntu-latest` и прикладывается к запуску артефактом (версия `<version.txt>-dev.<номер запуска>`);
+- на тег `v*` дополнительно создаётся GitHub Release с `Kordo-Setup-<версия>.exe` и `.sha256`. Теги с суффиксом (`v0.3.0-rc1`) публикуются как pre-release.
+
+Выпуск версии:
+
+```bash
+echo 0.3.0 > build/version.txt && git commit -am "Kordo 0.3.0"
+git tag v0.3.0 && git push origin main v0.3.0
+```
+
+## CLI
 
 ```text
 kordoctl status | connect | disconnect
@@ -72,6 +129,7 @@ windows/
 cmd/kordo-svc  точка входа службы
 cmd/kordoctl   CLI
 testdata/        golden-конфиги и фикстуры провайдеров
+build/           build.ps1, build-installer.sh, installer/kordo.nsi, version.txt, tags.txt
 docs/            ADR
 ```
 
@@ -80,6 +138,8 @@ docs/            ADR
 ```bash
 go test -tags with_gvisor,with_wireguard,with_utls,with_clash_api ./...
 ```
+
+Тесты гоняются на Windows: golden-конфиги содержат Windows-пути, а часть пакетов собирается только под Windows.
 
 `engine` прогоняет каждый сгенерированный конфиг через строгий парсер и конструктор sing-box: это эквивалент `sing-box check`. Golden-файлы обновляются так: `UPDATE_GOLDEN=1 go test ./core/...`.
 
@@ -91,4 +151,4 @@ go test -tags with_gvisor,with_wireguard,with_utls,with_clash_api ./...
 - подпроцессы отслеживаются опросом снимков процессов раз в 2 с (ETW пока нет), поэтому первое соединение очень короткоживущего потомка может пройти мимо правила;
 - точный PID-режим для общих exe требует патча sing-box (этап v1.1);
 - иконки в трее пока нет: окно можно закрыть, служба продолжит работать;
-- Android, подписи кода и инсталлятора пока нет.
+- Android и подписи кода пока нет.

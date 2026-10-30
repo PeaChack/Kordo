@@ -10,12 +10,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
 	"strings"
 	"time"
 
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
 
@@ -169,14 +171,7 @@ func uninstall() error {
 	defer m.Disconnect()
 	s, err := m.OpenService(serviceName)
 	if err == nil {
-		_, _ = s.Control(svc.Stop)
-		for i := 0; i < 40; i++ {
-			st, err := s.Query()
-			if err != nil || st.State == svc.Stopped {
-				break
-			}
-			time.Sleep(250 * time.Millisecond)
-		}
+		_ = stopAndWait(s, 30*time.Second)
 		if err := s.Delete(); err != nil {
 			s.Close()
 			return err
@@ -205,8 +200,31 @@ func control(start bool) error {
 	if start {
 		return s.Start()
 	}
-	_, err = s.Control(svc.Stop)
-	return err
+	return stopAndWait(s, 30*time.Second)
+}
+
+// stopAndWait asks the service to stop and waits until it has, so callers
+// (the installer) can replace the binary right after. Stopping a service that
+// is not running is not an error.
+func stopAndWait(s *mgr.Service, timeout time.Duration) error {
+	st, err := s.Control(svc.Stop)
+	if err != nil {
+		if errors.Is(err, windows.ERROR_SERVICE_NOT_ACTIVE) {
+			return nil
+		}
+		return err
+	}
+	deadline := time.Now().Add(timeout)
+	for st.State != svc.Stopped {
+		if time.Now().After(deadline) {
+			return fmt.Errorf("service %s did not stop within %s", serviceName, timeout)
+		}
+		time.Sleep(250 * time.Millisecond)
+		if st, err = s.Query(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ensureImmediateStart switches installs made by older versions from
