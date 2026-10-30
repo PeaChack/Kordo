@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/netip"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -182,6 +181,13 @@ func Generate(p model.Profile, servers []model.Server, env Env) (*Output, error)
 	}
 	var ruleSetDefs []any
 	var routeRules []any
+	// DNS follows the app's route (see the DNS section): rule-set tag and
+	// whether the bucket goes through a server, in routing order.
+	type dnsRoute struct {
+		tag    string
+		viaVPN bool
+	}
+	var dnsRoutes []dnsRoute
 	routeRules = append(routeRules,
 		// TCP is not sniffed: sniffing waits for the client's first bytes
 		// (TLS ClientHello) before dialing, adding a full round trip to every
@@ -226,7 +232,7 @@ func Generate(p model.Profile, servers []model.Server, env Env) (*Output, error)
 				"type":   "local",
 				"tag":    tag,
 				"format": "source",
-				"path":   filepath.Join(env.RulesDir, file),
+				"path":   joinDir(env.RulesDir, file),
 			})
 			rr := map[string]any{"rule_set": []string{tag}}
 			switch b {
@@ -234,8 +240,10 @@ func Generate(p model.Profile, servers []model.Server, env Env) (*Output, error)
 				rr["action"] = "reject"
 			case "direct":
 				rr["outbound"] = DirectTag
+				dnsRoutes = append(dnsRoutes, dnsRoute{tag, false})
 			default:
 				rr["outbound"] = OutboundTag(b)
+				dnsRoutes = append(dnsRoutes, dnsRoute{tag, true})
 			}
 			routeRules = append(routeRules, rr)
 		}
@@ -278,14 +286,44 @@ func Generate(p model.Profile, servers []model.Server, env Env) (*Output, error)
 			remote["detour"] = OutboundTag(sid)
 		}
 	}
+	dnsServers := []any{remote}
+	dnsFinal := "dns-remote"
+	var dnsRules []any
+	if p.DNS.Mode == "" || p.DNS.Mode == "via_server" {
+		// Apps that go direct resolve through DoH directly (still encrypted):
+		// through the VPN server a CDN would pick nodes near the server, and
+		// the direct connection would then go to the far side of the world.
+		dnsServers = append(dnsServers, map[string]any{"type": "https", "tag": "dns-direct", "server": doh})
+		toDirect := !def.IsServer()
+		if toDirect {
+			dnsFinal = "dns-direct"
+		}
+		// Same order as the route rules (first match wins), so an app matched
+		// by several rule-sets resolves the way its traffic is routed.
+		// Trailing rules that only repeat the final server are dropped.
+		last := -1
+		for i, r := range dnsRoutes {
+			if r.viaVPN == toDirect {
+				last = i
+			}
+		}
+		for _, r := range dnsRoutes[:last+1] {
+			srv := "dns-direct"
+			if r.viaVPN {
+				srv = "dns-remote"
+			}
+			dnsRules = append(dnsRules, map[string]any{"rule_set": []string{r.tag}, "server": srv})
+		}
+	}
+	dnsServers = append(dnsServers, map[string]any{"type": "local", "tag": "dns-local"})
 	dns := map[string]any{
-		"servers": []any{
-			remote,
-			map[string]any{"type": "local", "tag": "dns-local"},
-		},
-		"final": "dns-remote",
+		"servers": dnsServers,
+		"final":   dnsFinal,
 		// lets the activity view show host names without sniffing
 		"reverse_mapping": true,
+	}
+	if len(dnsRules) > 0 {
+		dns["rules"] = dnsRules
 	}
 	if !env.HasIPv6 || p.IPv6 == "block" {
 		dns["strategy"] = "ipv4_only"
@@ -309,7 +347,7 @@ func Generate(p model.Profile, servers []model.Server, env Env) (*Output, error)
 		"tag":            TunTag,
 		"interface_name": TunName,
 		"address":        addrs,
-		"mtu":            9000,
+		"mtu":            p.EffectiveMTU(),
 		"auto_route":     true,
 		"strict_route":   p.StrictRoute,
 		"stack":          stack,
@@ -458,4 +496,14 @@ func Describe(o *Output) string {
 	}
 	sort.Strings(names)
 	return fmt.Sprintf("%d bytes config, non-empty rule-sets: %v", len(o.Config), names)
+}
+
+// joinDir joins a file name to dir using dir's own separator, so the output
+// is the same on every OS the config is generated on: Windows paths keep "\",
+// Unix paths (Android) keep "/".
+func joinDir(dir, file string) string {
+	if strings.Contains(dir, `\`) {
+		return strings.TrimRight(dir, `\`) + `\` + file
+	}
+	return strings.TrimRight(dir, "/") + "/" + file
 }

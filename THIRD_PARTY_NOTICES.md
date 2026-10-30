@@ -30,6 +30,11 @@ https://github.com/tailscale/wf — Copyright (c) Tailscale Inc & AUTHORS.
 
 Desktop GUI framework. https://github.com/wailsapp/wails — Copyright (c) Lea Anthony.
 
+## energye/systray — Apache-2.0
+
+Notification-area (tray) icon. https://github.com/energye/systray — fork of
+getlantern/systray, Copyright (c) the systray authors.
+
 ## go-winio — MIT
 
 Named pipes. https://github.com/microsoft/go-winio — Copyright (c) Microsoft.

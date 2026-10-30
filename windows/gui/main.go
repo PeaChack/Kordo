@@ -19,25 +19,29 @@ import (
 //go:embed all:frontend
 var assets embed.FS
 
+var frontendFS fs.FS
+
 func main() {
 	frontend, err := fs.Sub(assets, "frontend")
 	if err != nil {
 		log.Fatal(err)
 	}
+	frontendFS = frontend
 	app := NewApp()
-	startState := options.Normal
+	hidden := false
 	for _, a := range os.Args[1:] {
-		if a == "--minimized" { // started by the login autostart entry
-			startState = options.Minimised
+		if a == "--minimized" { // started by the login autostart entry: tray only
+			hidden = true
 		}
 	}
 	err = wails.Run(&options.App{
-		WindowStartState: startState,
-		Title:            "Kordo",
-		Width:            1180,
-		Height:           760,
-		MinWidth:         900,
-		MinHeight:        600,
+		StartHidden:       hidden,
+		HideWindowOnClose: true, // the tray icon keeps Kordo reachable; "Выход" quits
+		Title:             "Kordo",
+		Width:             1180,
+		Height:            760,
+		MinWidth:          900,
+		MinHeight:         600,
 		AssetServer: &assetserver.Options{
 			Assets: frontend,
 		},

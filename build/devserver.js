@@ -2,7 +2,8 @@
 const http = require('http'), fs = require('fs'), path = require('path');
 const root = path.join(__dirname, '..', 'windows', 'gui', 'frontend');
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png' };
-http.createServer((req, res) => {
+const port = Number(process.env.PORT) || 5178;
+const server = http.createServer((req, res) => {
   const p = path.join(root, decodeURIComponent(req.url.split('?')[0]).replace(/^\/$/, '/index.html'));
   if (!p.startsWith(root)) { res.writeHead(403); return res.end(); }
   fs.readFile(p, (err, data) => {
@@ -10,4 +11,5 @@ http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': types[path.extname(p)] || 'application/octet-stream', 'Cache-Control': 'no-store' });
     res.end(data);
   });
-}).listen(5178, '127.0.0.1');
+}).listen(port, '127.0.0.1');
+module.exports = { port, close: () => server.close() };

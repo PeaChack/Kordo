@@ -64,6 +64,8 @@ type ServerHealth struct {
 	Fails     int       `json:"fails"`
 	LastError string    `json:"lastError,omitempty"`
 	LastCheck time.Time `json:"lastCheck"`
+
+	firstFail time.Time // start of the current run of failures
 }
 
 type Status struct {
@@ -83,6 +85,14 @@ type Config struct {
 	BackoffMin       time.Duration // default 1s
 	BackoffMax       time.Duration // default 60s
 	FailsToReset     int           // default 2: close the failing server's connections
+	// MinDownTime: a server counts as down only after failing for at least
+	// this long (default 10s), so a short blip (a network change, a lost
+	// probe) neither degrades the state nor closes connections. Negative:
+	// no minimum (tests).
+	MinDownTime time.Duration
+	// FallbackHealthURL is probed when the server's own URL fails, so an
+	// outage of the probe site alone does not mark servers down.
+	FallbackHealthURL string
 }
 
 func (c *Config) defaults() {
@@ -106,6 +116,9 @@ func (c *Config) defaults() {
 	}
 	if c.FailsToReset == 0 {
 		c.FailsToReset = 2
+	}
+	if c.MinDownTime == 0 {
+		c.MinDownTime = 10 * time.Second
 	}
 }
 
@@ -465,7 +478,13 @@ func (s *Supervisor) checkOnce() {
 		go func(id, tag string) {
 			ctx, cancel := context.WithTimeout(context.Background(), s.cfg.HealthTimeout)
 			defer cancel()
-			rtt, err := eng.URLTest(ctx, tag, s.hooks.HealthURL(id))
+			url := s.hooks.HealthURL(id)
+			rtt, err := eng.URLTest(ctx, tag, url)
+			if err != nil && s.cfg.FallbackHealthURL != "" && s.cfg.FallbackHealthURL != url && ctx.Err() == nil {
+				if rtt2, err2 := eng.URLTest(ctx, tag, s.cfg.FallbackHealthURL); err2 == nil {
+					rtt, err = rtt2, nil
+				}
+			}
 			results <- res{id, rtt, err}
 		}(id, tag)
 	}
@@ -492,13 +511,24 @@ func (s *Supervisor) checkOnce() {
 		h.Checked = true
 		h.LastCheck = time.Now()
 		if r.err == nil {
+			if h.Fails > 0 {
+				s.log.Info("server healthy again", "server", r.id, "failedFor", time.Since(h.firstFail).Round(time.Second))
+			}
 			h.Healthy, h.Fails, h.LastError, h.RTTms = true, 0, "", r.rtt.Milliseconds()
 			continue
 		}
+		wasDown := s.isDown(h)
 		h.Healthy = false
 		h.Fails++
+		if h.Fails == 1 {
+			h.firstFail = time.Now()
+		}
 		h.LastError = r.err.Error()
-		if h.Fails == s.cfg.FailsToReset {
+		if h.Fails == 1 || h.Fails%12 == 0 {
+			s.log.Info("health check failed", "server", r.id, "fails", h.Fails, "err", h.LastError)
+		}
+		if !wasDown && s.isDown(h) {
+			s.log.Warn("server down, closing its connections", "server", r.id, "fails", h.Fails, "err", h.LastError)
 			stale = append(stale, out.OutboundTags[r.id])
 		}
 	}
@@ -515,7 +545,7 @@ func (s *Supervisor) checkOnce() {
 	// server that failed FailsToReset times in a row makes the state degraded.
 	allOK := true
 	for _, h := range s.health {
-		if !h.Healthy && h.Fails >= s.cfg.FailsToReset {
+		if s.isDown(h) {
 			allOK = false
 		}
 	}
@@ -525,4 +555,9 @@ func (s *Supervisor) checkOnce() {
 	} else {
 		s.setStateLocked(StateDegraded, nil)
 	}
+}
+
+// isDown: failed FailsToReset probes in a row, over at least MinDownTime.
+func (s *Supervisor) isDown(h *ServerHealth) bool {
+	return !h.Healthy && h.Fails >= s.cfg.FailsToReset && time.Since(h.firstFail) >= s.cfg.MinDownTime
 }

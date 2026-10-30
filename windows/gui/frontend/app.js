@@ -709,7 +709,7 @@ function renderSettings(main) {
         (inverse ? `<div style="margin-top:8px" class="row"><span class="muted small">Сервер</span><select id="def-server">${S.servers.map(s => `<option value="${esc(s.id)}" ${p.defaultTarget.serverId === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>` : ''))}
       ${row('Kill switch', 'Если туннель упал', seg('kill', p.killSwitch || 'off', [['off', 'Выкл'], ['vpn_apps', 'VPN-приложения', 'Блокировать приложения, назначенные серверам'], ['all', 'Весь трафик', 'Блокировать всё, кроме локальной сети']]) +
         (S.status.firewallAvailable === false ? '<div class="err small">Брандмауэр недоступен</div>' : ''))}
-      ${row('DNS', 'Для всех приложений сразу', seg('dns', p.dns.mode || 'via_server', [['via_server', 'Через VPN', 'DoH через сервер — провайдер не видит запросы'], ['doh_direct', 'DoH напрямую'], ['system', 'Системный']]) +
+      ${row('DNS', 'Для всех приложений сразу', seg('dns', p.dns.mode || 'via_server', [['via_server', 'Через VPN', 'DoH через сервер для VPN-приложений, DoH напрямую для остальных — провайдер не видит запросы'], ['doh_direct', 'DoH напрямую'], ['system', 'Системный']]) +
         `<div class="row" style="margin-top:8px"><input type="text" id="doh" value="${esc(p.dns.doh || '')}" placeholder="1.1.1.1" style="width:130px" title="IP DoH-сервера">
         ${p.dns.mode === 'via_server' || !p.dns.mode ? `<select id="dns-server" title="Через какой сервер"><option value="">сервер: авто</option>${S.servers.map(s => `<option value="${esc(s.id)}" ${p.dns.serverId === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>` : ''}</div>`)}
       ${row('Локальная сеть мимо VPN', '', sw('allowLan', p.allowLan))}
@@ -720,6 +720,7 @@ function renderSettings(main) {
     </div>
     <details class="card" style="margin-top:14px"><summary class="muted">Дополнительно</summary>
       ${row('Строгая маршрутизация', 'Защита от утечек DNS', sw('strictRoute', p.strictRoute))}
+      ${row('MTU туннеля', 'Если сайты зависают или соединения рвутся — попробуйте 1500 или 1280', seg('mtu', String(p.mtu || 9000), [['9000', '9000', 'По умолчанию'], ['1500', '1500', 'Как у обычной сети'], ['1280', '1280', 'Минимум, для «проблемных» сетей']]))}
       ${row('Стек TUN', '', seg('stack', p.stack || 'gvisor', [['gvisor', 'gvisor', 'По умолчанию: короткие очереди под нагрузкой'], ['mixed', 'mixed'], ['system', 'system']]))}
       ${row('Фильтры брандмауэра', 'Если пропал интернет после сбоя', '<button class="btn danger" id="fw-clear">Снять все</button>')}
     </details>`;
@@ -740,6 +741,7 @@ function renderSettings(main) {
       case 'dns': save(np => { np.dns.mode = v; }); break;
       case 'ipv6': save(np => { np.ipv6 = v; }); break;
       case 'stack': save(np => { np.stack = v; }); break;
+      case 'mtu': save(np => { np.mtu = v === '9000' ? 0 : Number(v); }); break;
     }
   }));
   $$('[data-sw]').forEach(cb => cb.onchange = () => save(np => { np[cb.dataset.sw] = cb.checked; }));
