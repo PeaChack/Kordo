@@ -138,6 +138,8 @@ echo 0.3.0 > build/version.txt && git commit -am "Kordo 0.3.0"
 git tag v0.3.0 && git push origin main v0.3.0
 ```
 
+Или без тега руками: Actions → CI → Run workflow (ветка `main`), галочка «release». CI прогонит тесты, соберёт установщик и APK и сам создаст тег `v<версия из build/version.txt>` на этом коммите вместе с релизом.
+
 ## CLI
 
 ```text

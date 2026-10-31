@@ -8,6 +8,11 @@ on:
     branches: [main]
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Publish a release for build/version.txt (creates tag v<version> on this commit)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -92,6 +97,8 @@ jobs:
             if [[ "${v%%[-+]*}" != "$base" ]]; then
               echo "::warning::tag $GITHUB_REF_NAME does not match build/version.txt ($base)"
             fi
+          elif [[ "${{ github.event_name }}" == workflow_dispatch && "${{ inputs.release }}" == true ]]; then
+            v="$base" # manual release: the tag v<version> is created by the release job
           else
             v="$base-dev.$GITHUB_RUN_NUMBER"
           fi
@@ -175,7 +182,8 @@ jobs:
 
   release:
     name: GitHub release
-    if: startsWith(github.ref, 'refs/tags/v')
+    # a pushed tag v*, or a manual run with "release" ticked (on main)
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release && github.ref == 'refs/heads/main')
     needs: [test, test-linux, ui, installer, android]
     runs-on: ubuntu-latest
     permissions:
@@ -220,8 +228,10 @@ jobs:
             cat ./*.sha256
             echo '```'
           } > notes.md
-          gh release create "$GITHUB_REF_NAME" \
+          tag="v$VERSION"
+          gh release create "$tag" \
             --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
             --title "Kordo $VERSION" \
             --notes-file notes.md --generate-notes "${flags[@]}" \
             "${files[@]}"
