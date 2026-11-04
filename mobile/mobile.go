@@ -18,14 +18,17 @@ import (
 	"sync"
 
 	"github.com/PeaChack/Kordo/core/configgen"
+	"github.com/PeaChack/Kordo/core/geo"
 	"github.com/PeaChack/Kordo/core/model"
 	"github.com/PeaChack/Kordo/core/providers"
 	_ "github.com/PeaChack/Kordo/core/providers/all"
 )
 
 type state struct {
-	Profile model.Profile  `json:"profile"`
-	Servers []model.Server `json:"servers"`
+	Profile model.Profile           `json:"profile"`
+	Servers []model.Server          `json:"servers"`
+	Privacy privacy                 `json:"privacy"`
+	Geo     map[string]geo.Location `json:"geo,omitempty"` // server id -> location
 }
 
 var (
@@ -43,7 +46,7 @@ func Init(dir string) error {
 		return err
 	}
 	dataDir = dir
-	st = state{Profile: model.DefaultProfile()}
+	st = state{Profile: model.DefaultProfile(), Privacy: defaultPrivacy()}
 	b, err := os.ReadFile(statePath())
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
@@ -156,6 +159,10 @@ func RemoveServer(id string) error {
 		}
 	}
 	st.Servers = kept
+	delete(st.Geo, id)
+	if st.Privacy.MockServer == id {
+		st.Privacy.MockServer = ""
+	}
 	var rules []model.AppRule
 	for _, r := range st.Profile.Rules {
 		if !(r.Target.IsServer() && r.Target.ServerID == id) {

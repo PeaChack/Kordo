@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/PeaChack/Kordo/core/geo"
 	"github.com/PeaChack/Kordo/core/model"
 )
 
@@ -140,4 +141,38 @@ type StateNote struct {
 	State      string `json:"state"`
 	KillSwitch string `json:"killSwitch"`
 	Status     any    `json:"status"`
+}
+
+// Privacy (location masking).
+const (
+	MPrivacyStatus = "privacy.status" // PrivacyQuery → PrivacyStatus
+	MPrivacyPlace  = "privacy.place"  // PrivacyPlace → PrivacyStatus
+)
+
+type PrivacyQuery struct {
+	Refresh bool `json:"refresh"` // look the server's location up again
+}
+
+// PrivacyPlace sets the server's location by hand; Clear forgets it.
+type PrivacyPlace struct {
+	Lat         float64 `json:"lat"`
+	Lon         float64 `json:"lon"`
+	CountryCode string  `json:"countryCode"`
+	TimeZone    string  `json:"timeZone"`
+	Clear       bool    `json:"clear"`
+}
+
+// PrivacyStatus is what the service knows and does about location.
+type PrivacyStatus struct {
+	ServerID       string        `json:"serverId,omitempty"`
+	ServerName     string        `json:"serverName,omitempty"`
+	Server         *geo.Location `json:"server,omitempty"`
+	LookupError    string        `json:"lookupError,omitempty"`
+	ServerZone     string        `json:"serverZone,omitempty"`   // Windows time zone of the server
+	TimeZone       string        `json:"timeZone"`               // current Windows time zone
+	DeviceLocation string        `json:"deviceLocation"`         // HKLM switch: Allow/Deny/""
+	LocationGuard  bool          `json:"locationGuard"`          // Kordo turned location off now
+	ZoneChanged    bool          `json:"zoneChanged"`            // Kordo changed the time zone now
+	OriginalZone   string        `json:"originalZone,omitempty"` // restored on disconnect
+	Error          string        `json:"error,omitempty"`        // last apply error
 }

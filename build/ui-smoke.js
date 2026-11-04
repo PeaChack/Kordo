@@ -67,6 +67,18 @@ async function main() {
     await page.click('#upd-check'); await page.waitForTimeout(250);
   });
   await step('activity', async () => { await view('activity'); await page.waitForSelector('#act table', { timeout: 3000 }); });
+  await step('privacy: audit renders', async () => {
+    await view('privacy');
+    await page.waitForSelector('#priv .card', { timeout: 3000 });
+    await page.waitForSelector('#geo-manual', { timeout: 2000 });
+  });
+  await step('privacy: manual place dialog', async () => {
+    await page.click('#geo-manual'); await opens('#pl-save'); await closeModal();
+  });
+  await step('privacy: guard switch', async () => {
+    await page.click('[data-pf=locationGuard] + span'); await page.waitForTimeout(900);
+    await page.waitForSelector('#priv .card', { timeout: 3000 });
+  });
   await step('logs', async () => { await view('logs'); await page.click('#log-refresh'); await page.waitForTimeout(250); });
 
   await browser.close();

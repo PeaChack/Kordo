@@ -186,6 +186,7 @@ func (s *Service) handle(ctx context.Context, c *rpcapi.Conn, method string, par
 		s.stopWatcher()
 		s.setConnectedFlag(false)
 		s.applyFirewall(false, nil)
+		s.applyPrivacy(false)
 		return s.sup.Status(), nil
 
 	case rpcapi.MEngineStatus:
@@ -277,6 +278,24 @@ func (s *Service) handle(ctx context.Context, c *rpcapi.Conn, method string, par
 
 	case rpcapi.MDiagnostics:
 		return s.diagnostics(), nil
+
+	case rpcapi.MPrivacyStatus:
+		req, err := decode[rpcapi.PrivacyQuery](params)
+		if err != nil {
+			return nil, err
+		}
+		return s.privacyStatus(ctx, req.Refresh), nil
+
+	case rpcapi.MPrivacyPlace:
+		req, err := decode[rpcapi.PrivacyPlace](params)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.setServerPlace(req); err != nil {
+			return nil, err
+		}
+		s.privacyAfterChange()
+		return s.privacyStatus(ctx, false), nil
 	}
 	return nil, &rpcapi.Error{Code: -32601, Message: "method not found: " + method}
 }

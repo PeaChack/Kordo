@@ -94,6 +94,10 @@ func (a *App) dispatch(c bridgeCall) (res any, err error) {
 		return a.GetUpdateCheck(), nil
 	case "SetUpdateCheck":
 		return nil, a.SetUpdateCheck(arg[bool](c, 0))
+	case "PrivacyAudit":
+		return a.PrivacyAudit(), nil
+	case "OpenSettings":
+		return nil, a.OpenSettings(arg[string](c, 0))
 	case "ShowWindow":
 		a.ShowWindow()
 		return nil, nil
