@@ -1,12 +1,14 @@
 package mobile
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/PeaChack/Kordo/core/geo"
 	"github.com/PeaChack/Kordo/engine"
 )
 
@@ -127,5 +129,61 @@ func TestForms(t *testing.T) {
 	}
 	if _, err := BuildConfig(false); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPrivacyGeo(t *testing.T) {
+	if err := Init(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	geoLookup = func(_ context.Context, _ geo.Doer, ip string) (geo.Location, error) {
+		calls++
+		if ip != "203.0.113.9" {
+			t.Errorf("looked up %q", ip)
+		}
+		return geo.Location{IP: ip, CountryCode: "NL", City: "Amsterdam", Lat: 52.37, Lon: 4.89, TimeZone: "Europe/Amsterdam"}, nil
+	}
+	defer func() { geoLookup = geo.Lookup }()
+
+	ss := `{"server":"203.0.113.9","port":8388,"method":"2022-blake3-aes-128-gcm","password":"AAAAAAAAAAAAAAAAAAAAAA=="}`
+	id, err := SaveServer("", "shadowsocks", "NL", ss)
+	if err != nil {
+		t.Fatal(err)
+	}
+	js, err := ServerGeo("", false) // "" = the server for fake location (the only one)
+	if err != nil || !strings.Contains(js, `"countryCode":"NL"`) {
+		t.Fatalf("%s %v", js, err)
+	}
+	_, _ = ServerGeo(id, false)
+	if calls != 1 {
+		t.Fatalf("cached location looked up %d times", calls)
+	}
+	p, err := MockPoint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pt struct{ Lat, Lon float64 }
+	_ = json.Unmarshal([]byte(p), &pt)
+	if d := geo.Distance(52.37, 4.89, pt.Lat, pt.Lon); d > 1501 {
+		t.Fatalf("mock point %.0f m away", d)
+	}
+
+	// manual location wins over refresh
+	if err := SetServerGeo(id, 48.86, 2.35, "fr", ""); err != nil {
+		t.Fatal(err)
+	}
+	js, _ = ServerGeo(id, true)
+	if !strings.Contains(js, `"countryCode":"FR"`) || !strings.Contains(js, `"manual":true`) || calls != 1 {
+		t.Fatalf("manual: %s (calls %d)", js, calls)
+	}
+	if err := SetPrivacySettings(`{"mockLocation":true,"jitterM":0}`); err != nil {
+		t.Fatal(err)
+	}
+	if err := RemoveServer(id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ServerGeo("", false); err == nil {
+		t.Fatal("location without servers")
 	}
 }

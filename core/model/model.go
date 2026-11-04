@@ -265,9 +265,11 @@ type Profile struct {
 	IPv6           string    `json:"ipv6"` // "auto" | "block"
 	StrictRoute    bool      `json:"strictRoute"`
 	ConnectOnStart bool      `json:"connectOnStart"`
-	Stack          string    `json:"stack,omitempty"`      // tun stack: "gvisor" (default) | "mixed" | "system"
-	MTU            int       `json:"mtu,omitempty"`        // TUN MTU, 0 = DefaultMTU; clamped to 1280..9000
-	VerboseLog     bool      `json:"verboseLog,omitempty"` // engine logs every connection (slow with many connections)
+	Stack          string    `json:"stack,omitempty"`          // tun stack: "gvisor" (default) | "mixed" | "system"
+	MTU            int       `json:"mtu,omitempty"`            // TUN MTU, 0 = DefaultMTU; clamped to 1280..9000
+	VerboseLog     bool      `json:"verboseLog,omitempty"`     // engine logs every connection (slow with many connections)
+	LocationGuard  bool      `json:"locationGuard,omitempty"`  // Windows: deny location to all apps while connected
+	ServerTimeZone bool      `json:"serverTimeZone,omitempty"` // Windows: time zone of the server while connected
 	Rules          []AppRule `json:"rules"`
 	ChildAnswers   []Learned `json:"childAnswers,omitempty"` // "always so" answers for shared children
 }

@@ -35,6 +35,25 @@ class ScreensTest {
     @Test fun permissions() = shot("permissions") {
         PermissionsContent(androidx.compose.ui.platform.LocalContext.current, onboarding = true, onAsk = {}, onDone = {})
     }
+    @Test fun privacy() = shot("privacy") {
+        val report = PrivacyReport(
+            level = Level.BASIC,
+            server = ServerPlace("NL", "Netherlands", "Amsterdam", "Europe/Amsterdam", 52.37, 4.89, false),
+            checks = listOf(
+                Check("Фоновый поиск Wi-Fi", Severity.WARN, "Включён: телефон ищет сети Wi-Fi вокруг.",
+                    listOf(Fix.Adb("Команда ADB", "adb shell settings put global wifi_scan_always_enabled 0"))),
+                Check("Часовой пояс", Severity.WARN, "Телефон: Europe/Moscow. Сервер: Europe/Amsterdam."),
+                Check("Страна SIM и сотовой сети", Severity.BAD, "SIM: Россия. Сеть: Россия."),
+            ),
+            apps = listOf(
+                AppExposure("org.telegram.messenger", "Telegram", false, "a1", true, listOf(Channel.FINE, Channel.WIFI, Channel.BLUETOOTH, Channel.CELL), emptyList()),
+                AppExposure("com.yandex.maps", "Карты", false, null, false, listOf(Channel.FINE, Channel.BACKGROUND), emptyList()),
+            ),
+        )
+        PrivacyContent(report, null, mockEnabled = true, jitterM = 1500, mockState = MockLocation.State(error = "Kordo не выбран в «Для разработчиков»"),
+            onLookup = {}, onManual = { _, _, _ -> }, onClearManual = {}, onMock = {}, onJitter = {}, onCheckRoot = {},
+            onFix = {}, onAppSettings = {}, onAppDeny = { _, _ -> }, onCopyAdb = {}, onCopy = {})
+    }
     @Test fun editorPaste() = shot("editor_paste") { ServerEditor(null) {} }
     @Test fun editorVless() = shot("editor_vless") { ServerEditor(null, "vless") {} }
     @Test fun editorShadowsocks() = shot("editor_shadowsocks") { ServerEditor(null, "shadowsocks") {} }

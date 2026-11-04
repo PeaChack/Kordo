@@ -85,6 +85,7 @@ class KordoVpnService : VpnService(), PlatformInterface, CommandServerHandler {
                 server = s
                 s.startOrReloadService(config, overrides())
                 VpnState.set(Status.CONNECTED)
+                MockLocation.start(this) // fake location, if enabled
             } catch (e: Exception) {
                 Log.e(TAG, "start failed", e)
                 VpnState.set(Status.OFF, e.message ?: e.toString())
@@ -111,6 +112,7 @@ class KordoVpnService : VpnService(), PlatformInterface, CommandServerHandler {
     }
 
     private fun stopVpn(keepError: Boolean = false) {
+        MockLocation.stop()
         if (!keepError) VpnState.set(Status.STOPPING)
         VpnState.reload = null
         val s = server

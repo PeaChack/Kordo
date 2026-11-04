@@ -56,6 +56,7 @@ type Service struct {
 	mon      *netmon.Monitor
 	matcher  *proctree.Matcher
 	resolver *resolver
+	priv     privacyState
 
 	clashAddr   string
 	clashSecret string
@@ -197,6 +198,9 @@ func (s *Service) Run(ctx context.Context) error {
 		}
 	}()
 
+	// undo what a crash or reboot left while connected
+	s.applyPrivacy(false)
+
 	prof, _ := s.store.Snapshot()
 	if prof.ConnectOnStart || s.wasConnected() {
 		if err := s.sup.Connect(); err != nil {
@@ -208,6 +212,7 @@ func (s *Service) Run(ctx context.Context) error {
 	s.log.Info("kordo service stopping")
 	l.Close()
 	s.stopWatcher()
+	s.applyPrivacy(false)
 	// Note: kill-switch filters are intentionally left in place.
 	return nil
 }
@@ -307,6 +312,7 @@ func (s *Service) startEngine(out *configgen.Output) (supervisor.Engine, error) 
 	s.setConnectedFlag(true)
 	s.applyFirewall(true, out.ServerPrefixes)
 	s.startWatcher()
+	go s.applyPrivacy(true)
 	return inst, nil
 }
 
@@ -499,6 +505,7 @@ func (s *Service) afterChange() {
 	if s.sup.Engine() != nil {
 		s.applyFirewall(true, nil)
 	}
+	s.privacyAfterChange()
 	s.rpc.Notify(rpcapi.NDataChanged, map[string]any{})
 }
 

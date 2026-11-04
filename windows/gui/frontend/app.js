@@ -42,6 +42,11 @@ const Mock = (() => {
         case 'profile.set': st.profile = params.profile; return true;
         case 'killswitch.set': st.profile.killSwitch = params.mode; return st.status;
         case 'servers.test': return { tcpMs: 31, httpMs: 120, via: 'running engine' };
+        case 'privacy.status': return {
+          serverId: 'a1', serverName: 'Amsterdam Reality', timeZone: 'Russian Standard Time', serverZone: 'W. Europe Standard Time', deviceLocation: '',
+          server: { ip: '203.0.113.7', country: 'Netherlands', countryCode: 'NL', city: 'Amsterdam', lat: 52.37, lon: 4.89, timeZone: 'Europe/Amsterdam', manual: !!st.manual },
+          locationGuard: !!st.profile.locationGuard && st.status.state !== 'off', zoneChanged: false };
+        case 'privacy.place': st.manual = !params.clear; return true;
         default: return true;
       }
     },
@@ -83,7 +88,7 @@ function makeGoBridge() {
     window.runtime.EventsEmit("bridge:call", JSON.stringify({ id, fn, args }));
   });
   const names = ["Call", "ServiceOnline", "PickExecutable", "Icons", "GetAutostart", "SetAutostart", "SaveText", "Notify", "ShowWindow",
-    "Version", "CheckUpdate", "InstallUpdate", "OpenReleasePage", "GetUpdateCheck", "SetUpdateCheck"];
+    "Version", "CheckUpdate", "InstallUpdate", "OpenReleasePage", "GetUpdateCheck", "SetUpdateCheck", "PrivacyAudit", "OpenSettings"];
   return Object.fromEntries(names.map(n => [n, (...args) => call(n, ...args)]));
 }
 
@@ -247,7 +252,7 @@ function render() {
       <p class="muted small">Окно подключится автоматически, как только служба станет доступна.</p></div>`;
     return;
   }
-  ({ home: renderHome, servers: renderServers, apps: renderApps, activity: renderActivity, settings: renderSettings, logs: renderLogs })[S.view](main);
+  ({ home: renderHome, servers: renderServers, apps: renderApps, activity: renderActivity, privacy: renderPrivacy, settings: renderSettings, logs: renderLogs })[S.view](main);
 }
 
 function renderHome(main) {
@@ -692,6 +697,196 @@ async function renderActivity(main) {
   await draw();
   clearInterval(S.activityTimer);
   S.activityTimer = setInterval(draw, 3000);
+}
+
+
+// ------------------------------------------------------------------ privacy
+// What can tell apps where the computer is, and what Kordo does about it.
+const MOCK_AUDIT = {
+  region: 'RU', language: 'ru-RU', browsers: ['Google Chrome', 'Mozilla Firefox', 'Яндекс Браузер'],
+  capabilities: [
+    { id: 'location', title: 'Местоположение', about: 'Координаты от GPS, Wi-Fi и IP через службу определения местоположения Windows.', device: '', user: 'Allow', apps: [
+      { capability: 'location', app: 'C:\\Program Files\\Mozilla Firefox\\firefox.exe', desktop: true, allowed: true, lastUsed: new Date(Date.now() - 3600e3).toISOString(), inUse: false },
+      { capability: 'location', app: 'Microsoft.WindowsMaps_8wekyb3d8bbwe', desktop: false, allowed: true, lastUsed: new Date(Date.now() - 86400e3 * 3).toISOString(), inUse: false },
+      { capability: 'location', app: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', desktop: true, allowed: true, lastUsed: new Date(Date.now() - 120e3).toISOString(), inUse: true },
+    ] },
+    { id: 'wifiData', title: 'Данные Wi-Fi', about: 'Сети вокруг и их адреса (BSSID). По ним место определяется с точностью до дома.', device: '', user: '', apps: [] },
+    { id: 'bluetoothSync', title: 'Bluetooth-устройства', about: 'Устройства и маячки рядом.', device: '', user: 'Allow', apps: [
+      { capability: 'bluetoothSync', app: 'C:\\Users\\me\\AppData\\Roaming\\Telegram Desktop\\Telegram.exe', desktop: true, allowed: true, lastUsed: new Date(Date.now() - 86400e3).toISOString() },
+    ] },
+    { id: 'radios', title: 'Радиомодули', about: 'Управление Wi-Fi и Bluetooth.', device: '', user: '', apps: [] },
+  ],
+};
+const CAP_SETTINGS = { location: 'ms-settings:privacy-location', radios: 'ms-settings:privacy-radios' };
+const COUNTRY = { RU: 'Россия', BY: 'Беларусь', KZ: 'Казахстан', UA: 'Украина', NL: 'Нидерланды', DE: 'Германия', FI: 'Финляндия', US: 'США', GB: 'Великобритания', FR: 'Франция', TR: 'Турция', AM: 'Армения', GE: 'Грузия', PL: 'Польша', SE: 'Швеция', LV: 'Латвия', LT: 'Литва', EE: 'Эстония', CH: 'Швейцария', JP: 'Япония', SG: 'Сингапур', AE: 'ОАЭ', CZ: 'Чехия', AT: 'Австрия', ES: 'Испания', IT: 'Италия', RS: 'Сербия' };
+const countryName = (cc) => COUNTRY[cc] || cc || '?';
+
+function openSettings(uri) {
+  if (isWails) guard(() => Go.OpenSettings(uri)).catch(() => { });
+  else toast('Открыть: ' + uri);
+}
+
+function ago(iso) {
+  const t = Date.parse(iso);
+  if (!t || t < 0 || new Date(t).getFullYear() < 2000) return 'никогда';
+  const s = (Date.now() - t) / 1000;
+  if (s < 90) return 'только что';
+  if (s < 3600) return Math.round(s / 60) + ' мин назад';
+  if (s < 86400) return Math.round(s / 3600) + ' ч назад';
+  if (s < 86400 * 60) return Math.round(s / 86400) + ' дн назад';
+  return new Date(t).toLocaleDateString('ru-RU');
+}
+
+// routeOf tells whether a desktop app goes through a server.
+function routeOf(a) {
+  if (!a.desktop) return S.profile && S.profile.defaultTarget.kind === 'server' ? 'vpn' : 'direct';
+  const p = a.app.toLowerCase(), n = base(a.app).toLowerCase();
+  for (const r of S.rules) {
+    const m = r.match;
+    if ((m.kind === 'path' && m.value.toLowerCase() === p) || (m.kind === 'name' && m.value.toLowerCase() === n))
+      return r.target.kind === 'server' ? 'vpn' : r.target.kind === 'block' ? 'block' : 'direct';
+  }
+  return S.profile && S.profile.defaultTarget.kind === 'server' ? 'vpn' : 'direct';
+}
+
+function appTitle(a) {
+  if (a.desktop) return base(a.app);
+  return a.app.split('_')[0].split('.').pop();
+}
+
+async function renderPrivacy(main, refresh = false) {
+  main.innerHTML = `<h1>Приватность</h1><p class="sub">Как приложения могут узнать, где вы находитесь, и что Kordo с этим делает.</p><div id="priv" class="empty">Проверка…</div>`;
+  let st = null, audit = null, err = '';
+  try {
+    [st, audit] = await Promise.all([
+      rpc('privacy.status', { refresh }),
+      isWails ? Go.PrivacyAudit() : Promise.resolve(MOCK_AUDIT),
+    ]);
+  } catch (e) { err = String(e.message || e); }
+  if (S.view !== 'privacy') return;
+  const box = $('#priv');
+  if (!box) return;
+  if (!st || !audit) { box.innerHTML = esc(err || 'Не удалось получить данные'); return; }
+  box.className = '';
+  box.innerHTML = privacyHTML(st, audit);
+  bindPrivacy(st);
+}
+
+function privacyChecks(st, audit) {
+  const p = S.profile || {};
+  const srv = st.server;
+  const cc = srv && srv.countryCode;
+  const loc = audit.capabilities.find(c => c.id === 'location') || { apps: [] };
+  const locOff = st.deviceLocation === 'Deny' || loc.user === 'Deny';
+  const checks = [];
+  const add = (sev, title, text, actions = '') => checks.push({ sev, title, text, actions });
+  const set = (uri, label = 'Открыть параметры') => `<button class="btn sm" data-open="${esc(uri)}">${esc(label)}</button>`;
+
+  if (locOff) add('ok', 'Служба геолокации', st.locationGuard ? 'Выключена Kordo на время подключения. Приложения не получают координаты.' : 'Выключена. Приложения не получают координаты.');
+  else add('bad', 'Служба геолокации', 'Включена. Windows определяет место по сетям Wi-Fi вокруг и отдаёт координаты приложениям — VPN это не скрывает. Подменить координаты в Windows без драйвера нельзя, поэтому их лучше выключить.',
+    (p.locationGuard ? '' : '<button class="btn sm primary" data-sw-priv="locationGuard">Выключать при подключении</button> ') + set('ms-settings:privacy-location'));
+
+  if (!st.serverZone) add('info', 'Часовой пояс', `Сейчас: ${esc(st.timeZone || '?')}. Часовой пояс сервера неизвестен.`);
+  else if ((st.timeZone || '').toLowerCase() === st.serverZone.toLowerCase()) add('ok', 'Часовой пояс', `Совпадает с сервером: ${esc(st.timeZone)}.` + (st.zoneChanged ? ` После отключения вернётся ${esc(st.originalZone)}.` : ''));
+  else add('warn', 'Часовой пояс', `Компьютер: ${esc(st.timeZone)}. Сервер: ${esc(st.serverZone)}. Сайты видят часовой пояс через JavaScript и сравнивают его со страной IP.`,
+    p.serverTimeZone ? '' : '<button class="btn sm primary" data-sw-priv="serverTimeZone">Менять при подключении</button>');
+
+  if (audit.region && cc && audit.region !== cc) add('warn', 'Регион Windows', `Указан «${esc(countryName(audit.region))}», сервер — ${esc(countryName(cc))}. Регион видят Microsoft Store, погода, новости и приложения из Store. Перехватить нельзя — можно сменить вручную.`, set('ms-settings:regionformatting', 'Регион'));
+  else if (audit.region) add('ok', 'Регион Windows', `${esc(countryName(audit.region))}` + (cc ? ' — совпадает с сервером.' : '.'));
+
+  if (audit.language) add('info', 'Язык системы', `${esc(audit.language)}. Сайты видят язык браузера (Accept-Language): он выдаёт язык, но не место. Если важно — поставьте в браузере первым английский.`);
+
+  const wifi = audit.capabilities.find(c => c.id === 'wifiData');
+  if (wifi && wifi.apps.length) add('warn', 'Данные Wi-Fi', `${wifi.apps.length} прил. запрашивали список сетей вокруг: по нему место определяется точно.`);
+  const bt = audit.capabilities.find(c => c.id === 'bluetoothSync');
+  if (bt && bt.apps.length) add('info', 'Bluetooth', `${bt.apps.length} прил. обращались к Bluetooth-устройствам. Маячки рядом могут выдать место; выключите Bluetooth, когда он не нужен.`, set('ms-settings:bluetooth', 'Bluetooth'));
+
+  const direct = loc.apps.filter(a => a.allowed && routeOf(a) === 'direct');
+  if (!locOff && direct.length) add('warn', 'Знают место и идут мимо VPN', `${direct.map(a => esc(appTitle(a))).join(', ')}: видят и координаты, и ваш настоящий IP.`);
+
+  if (audit.browsers.length) add('info', 'Браузеры', `${esc(audit.browsers.join(', '))}. Сайт может запросить геолокацию — браузер возьмёт её у Windows (выключите службу выше) или определит по Wi-Fi. Запретите геолокацию в настройках сайтов браузера. WebRTC в браузере может показать адрес в обход VPN, если браузер не в списке приложений.`);
+  add('info', 'Сотовый модем, GPS-приёмник', 'Если они есть, Windows использует их через ту же службу геолокации — выключение службы закрывает и их.');
+  return checks;
+}
+
+function privacyHTML(st, audit) {
+  const p = S.profile || {};
+  const srv = st.server;
+  const sevDot = { ok: 'ok', warn: 'warn', bad: 'bad', info: '' };
+  const sw = (name, on) => `<label class="switch"><input type="checkbox" data-pf="${name}" ${on ? 'checked' : ''}><span></span></label>`;
+  const place = !st.serverId ? '<p class="muted">Добавьте сервер.</p>'
+    : srv ? `<div class="row"><div><b>${esc(countryName(srv.countryCode))}${srv.city ? ', ' + esc(srv.city) : ''}</b>
+        <div class="muted small">${esc(st.serverName)} · ${srv.ip ? esc(srv.ip) + ' · ' : ''}${srv.lat.toFixed(3)}, ${srv.lon.toFixed(3)} · ${esc(srv.timeZone || 'часовой пояс неизвестен')}${srv.manual ? ' · <span class="tag">вручную</span>' : ''}</div></div>
+        <span class="spacer"></span><button class="btn sm" id="geo-refresh">Обновить</button><button class="btn sm" id="geo-manual">Указать вручную</button>${srv.manual ? '<button class="btn sm" id="geo-clear">Сбросить</button>' : ''}</div>`
+      : `<div class="row"><div class="err small">${esc(st.lookupError || 'Неизвестно')}</div><span class="spacer"></span><button class="btn sm" id="geo-refresh">Повторить</button><button class="btn sm" id="geo-manual">Указать вручную</button></div>`;
+  const checks = privacyChecks(st, audit);
+  const caps = audit.capabilities.map(c => {
+    const off = c.device === 'Deny' || c.user === 'Deny';
+    const rows = c.apps.map(a => {
+      const r = routeOf(a);
+      return `<tr><td style="min-width:0"><div class="name">${esc(appTitle(a))}${a.inUse ? ' <span class="pill pill-warn">сейчас</span>' : ''}</div><div class="path" title="${esc(a.app)}">${esc(a.app)}</div></td>
+        <td>${a.allowed ? '<span class="pill pill-warn">разрешено</span>' : '<span class="pill pill-off">запрещено</span>'}</td>
+        <td class="small">${ago(a.lastUsed)}</td>
+        <td>${r === 'vpn' ? '<span class="pill pill-ok">через VPN</span>' : r === 'block' ? '<span class="pill pill-bad">блок</span>' : '<span class="pill pill-off">напрямую</span>'}</td></tr>`;
+    }).join('');
+    return `<div class="card" style="margin-top:14px"><div class="row"><div><h3>${esc(c.title)} ${off ? '<span class="pill pill-ok">выключено</span>' : ''}</h3><div class="muted small">${esc(c.about)}</div></div>
+      <span class="spacer"></span><button class="btn sm" data-open="${esc(CAP_SETTINGS[c.id] || 'ms-settings:privacy')}">Параметры</button></div>
+      ${c.apps.length ? `<table class="act" style="margin-top:8px"><colgroup><col><col style="width:120px"><col style="width:120px"><col style="width:120px"></colgroup>
+        <tr><th>Приложение</th><th>Доступ</th><th>Последний раз</th><th>Маршрут</th></tr>${rows}</table>` : '<p class="muted small">Приложения не запрашивали.</p>'}</div>`;
+  }).join('');
+  return `
+    <div class="card"><h3>Уровни защиты</h3>
+      <div class="field"><div><b>Без прав администратора</b><div class="hint">Окно Kordo</div></div><div class="small">Проверка ниже: кто и когда запрашивал место, Wi-Fi и Bluetooth, что выдаёт регион и часовой пояс, ссылки на нужные параметры Windows.</div></div>
+      <div class="field"><div><b>Служба Kordo</b><div class="hint">Права администратора — уже есть</div></div><div class="small">На время подключения выключает службу геолокации для всех приложений и ставит часовой пояс сервера. После отключения (и после сбоя или перезагрузки) всё возвращается как было.</div></div>
+      <div class="field"><div><b>Нельзя перехватить</b></div><div class="small muted">Подменить координаты для настольных приложений Windows без драйвера нельзя; регион, язык и списки сетей Wi-Fi приложения читают сами — их можно только выключить или сменить вручную.</div></div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>Место сервера</h3>${place}</div>
+    <div class="card" style="margin-top:14px"><h3>При подключении</h3>
+      <div class="field"><div><b>Выключать геолокацию</b><div class="hint">Для всех приложений и пользователей</div></div><div class="row">${sw('locationGuard', p.locationGuard)}<span class="small muted">${st.locationGuard ? 'Сейчас выключена Kordo' : ''}</span></div></div>
+      <div class="field"><div><b>Часовой пояс сервера</b><div class="hint">${esc(st.serverZone || 'неизвестен')}</div></div><div class="row">${sw('serverTimeZone', p.serverTimeZone)}<span class="small muted">${st.zoneChanged ? 'Вернётся: ' + esc(st.originalZone) : ''}</span></div></div>
+      ${st.error ? `<div class="err small">${esc(st.error)}</div>` : ''}
+    </div>
+    <div class="card" style="margin-top:14px"><h3>Проверка</h3>
+      ${checks.map(c => `<div class="ask-row" style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)"><span class="dot ${sevDot[c.sev]}" style="margin-top:6px"></span>
+        <div style="flex:1"><b>${esc(c.title)}</b><div class="small">${c.text}</div>${c.actions ? `<div class="row" style="margin-top:6px;gap:8px">${c.actions}</div>` : ''}</div></div>`).join('')}
+    </div>
+    <h3 style="margin:22px 0 0">Приложения</h3><p class="muted small" style="margin:2px 0 0">Из журнала доступа Windows: кто запрашивал и когда.</p>
+    ${caps}`;
+}
+
+function bindPrivacy(st) {
+  const save = async (name, on) => {
+    const np = JSON.parse(JSON.stringify(S.profile));
+    np[name] = on;
+    await guard(() => rpc('profile.set', { profile: np }), 'Сохранено').catch(() => { });
+    await loadAll();
+    setTimeout(() => { if (S.view === 'privacy') renderPrivacy($('#main')); }, 600);
+  };
+  $$('[data-pf]').forEach(cb => cb.onchange = () => save(cb.dataset.pf, cb.checked));
+  $$('[data-sw-priv]').forEach(b => b.onclick = () => save(b.dataset.swPriv, true));
+  $$('[data-open]').forEach(b => b.onclick = () => openSettings(b.dataset.open));
+  const r = $('#geo-refresh');
+  if (r) r.onclick = () => renderPrivacy($('#main'), true);
+  const c = $('#geo-clear');
+  if (c) c.onclick = () => guard(() => rpc('privacy.place', { clear: true }), 'Сброшено').then(() => renderPrivacy($('#main'), true)).catch(() => { });
+  const m = $('#geo-manual');
+  if (m) m.onclick = () => {
+    const s = st.server || {};
+    const d = modal('Место сервера вручную', `
+      <p class="muted small">Если сервис определения ошибся (например, у хостинга адрес другой страны).</p>
+      <div class="row"><label>Широта <input type="text" id="pl-lat" value="${s.lat ?? ''}" style="width:120px"></label>
+      <label>Долгота <input type="text" id="pl-lon" value="${s.lon ?? ''}" style="width:120px"></label></div>
+      <div class="row" style="margin-top:10px"><label>Страна (код) <input type="text" id="pl-cc" value="${esc(s.countryCode || '')}" style="width:60px" placeholder="NL"></label>
+      <label>Часовой пояс <input type="text" id="pl-tz" value="${esc(s.timeZone || '')}" style="width:180px" placeholder="Europe/Amsterdam"></label></div>`,
+      '<button class="btn" data-close>Отмена</button><button class="btn primary" id="pl-save">Сохранить</button>');
+    $$('[data-close]', d.root).forEach(b => b.onclick = d.close);
+    $('#pl-save').onclick = async () => {
+      const num = (id) => Number(String($(id).value).replace(',', '.'));
+      const body = { lat: num('#pl-lat'), lon: num('#pl-lon'), countryCode: $('#pl-cc').value.trim(), timeZone: $('#pl-tz').value.trim() };
+      if (!isFinite(body.lat) || !isFinite(body.lon)) { toast('Неверные координаты', 'bad'); return; }
+      try { await guard(() => rpc('privacy.place', body), 'Сохранено'); d.close(); renderPrivacy($('#main')); } catch { }
+    };
+  };
 }
 
 // ------------------------------------------------------------------ settings

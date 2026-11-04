@@ -111,10 +111,10 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Tab(val title: String) { HOME("Подключение"), SERVERS("Серверы"), APPS("Приложения"), SETTINGS("Настройки") }
+private enum class Tab(val title: String) { HOME("Главная"), SERVERS("Серверы"), APPS("Приложения"), PRIVACY("Приватность"), SETTINGS("Настройки") }
 
 /** Bumped after every change so lists re-read the Go core. */
-private val revision = mutableIntStateOf(0)
+val revision = mutableIntStateOf(0)
 fun changed() {
     revision.intValue++
     VpnState.changed()
@@ -170,13 +170,14 @@ private fun KordoUi(activity: MainActivity) {
         NavigationBar {
             Tab.entries.forEach { t ->
                 NavigationBarItem(
-                    selected = tab == t, onClick = { tab = t }, label = { Text(t.title) },
+                    selected = tab == t, onClick = { tab = t }, label = { Text(t.title, maxLines = 1, fontSize = 11.sp) },
                     icon = {
                         Icon(
                             when (t) {
                                 Tab.HOME -> Icons.Filled.Home
                                 Tab.SERVERS -> Icons.Filled.List
                                 Tab.APPS -> Icons.Filled.Menu
+                                Tab.PRIVACY -> Icons.Filled.LocationOn
                                 Tab.SETTINGS -> Icons.Filled.Settings
                             }, null
                         )
@@ -190,6 +191,7 @@ private fun KordoUi(activity: MainActivity) {
                 Tab.HOME -> HomeScreen(activity) { tab = Tab.SERVERS }
                 Tab.SERVERS -> ServersScreen()
                 Tab.APPS -> AppsScreen()
+                Tab.PRIVACY -> PrivacyScreen()
                 Tab.SETTINGS -> SettingsScreen()
             }
         }
