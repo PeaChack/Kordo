@@ -328,3 +328,138 @@ func (p Profile) Validate(servers []Server) error {
 	}
 	return nil
 }
+
+// ---------------------------------------------------------------- child families
+
+// versionSegRe matches folder names that change on every update:
+// "139.0.6053.38", "app-1.0.9", "v2.3", "1.2.3-beta".
+var versionSegRe = regexp.MustCompile(`^[A-Za-z_-]*\d+([._-]\d+)+[A-Za-z0-9._-]*$`)
+
+// IsTempPath reports whether path is inside a temporary folder. Programs there
+// are one-shot (installers, patchers) and get a new random folder every run.
+func IsTempPath(path string) bool {
+	l := strings.ToLower(strings.ReplaceAll(path, "/", `\`))
+	return strings.Contains(l, `\appdata\local\temp\`) || strings.Contains(l, `\windows\temp\`) ||
+		strings.Contains(l, `\windows\systemtemp\`)
+}
+
+// Family groups matches that are the same program across updates: the same
+// executable in a versioned folder (Opera\139.0\x.exe vs Opera\140.0\x.exe),
+// or the same installer unpacked into different temp folders. Learned children
+// and pending questions are kept once per family instead of once per path.
+func (m Match) Family() string {
+	n := m.Normalize()
+	if n.Kind != MatchPath {
+		return n.Key()
+	}
+	v := strings.ToLower(n.Value)
+	segs := strings.Split(v, `\`)
+	name := segs[len(segs)-1]
+	if IsTempPath(v) {
+		return "temp|" + name
+	}
+	for i := 0; i < len(segs)-1; i++ {
+		if versionSegRe.MatchString(segs[i]) {
+			segs[i] = "*"
+		}
+	}
+	return "path|" + strings.Join(segs, `\`)
+}
+
+// genericDirs are folder names that only structure an application's files;
+// the application itself is the folder above them.
+var genericDirs = map[string]bool{
+	"bin": true, "bin64": true, "bin32": true, "x64": true, "x86": true, "win64": true, "win32": true,
+	"app": true, "application": true, "current": true, "resources": true, "binaries": true,
+}
+
+// broadDirs hold many unrelated applications; an app root never climbs to them.
+var broadDirs = map[string]bool{
+	"program files": true, "program files (x86)": true, "programs": true, "local": true, "roaming": true,
+	"appdata": true, "windows": true, "system32": true, "syswow64": true, "users": true,
+	"desktop": true, "downloads": true, "documents": true, "windowsapps": true, "programdata": true,
+}
+
+// AppRoot returns the lower-cased folder (with a trailing backslash) that holds
+// the files of the application at path. Version and generic folders are
+// climbed out of; Store apps are rooted at their package folder.
+func AppRoot(path string) string {
+	v := strings.ToLower(Match{Kind: MatchPath, Value: path}.Normalize().Value)
+	if loc := windowsAppsRe.FindStringIndex(v); loc != nil {
+		return v[:loc[1]]
+	}
+	segs := strings.Split(v, `\`)
+	if len(segs) < 2 {
+		return ""
+	}
+	dir := segs[:len(segs)-1]
+	for len(dir) > 2 {
+		last := dir[len(dir)-1]
+		parent := dir[len(dir)-2]
+		if broadDirs[parent] || parent == "users" {
+			break
+		}
+		if versionSegRe.MatchString(last) || genericDirs[last] {
+			dir = dir[:len(dir)-1]
+			continue
+		}
+		break
+	}
+	return strings.Join(dir, `\`) + `\`
+}
+
+// RetargetChildren moves the children that followed the app's old route to
+// its new one. Children the user sent elsewhere keep their route.
+func RetargetChildren(r *AppRule, old Target) {
+	if old.Equal(r.Target) {
+		return
+	}
+	for i := range r.Learned {
+		if r.Learned[i].Target.Equal(old) {
+			r.Learned[i].Target = r.Target
+		}
+	}
+}
+
+// RepairChildren fixes learned children left behind by older versions:
+//   - auto-inherited children pointing at a server the app no longer uses
+//     (the app was moved, its children kept tunnelling);
+//   - several entries of one family (each app update or installer run added
+//     a new path); only the newest is kept.
+//
+// It reports how many entries were changed or removed.
+func RepairChildren(p *Profile) int {
+	n := 0
+	for i := range p.Rules {
+		r := &p.Rules[i]
+		for j := range r.Learned {
+			l := &r.Learned[j]
+			if l.Source == "inherit" && l.Target.IsServer() && !l.Target.Equal(r.Target) {
+				l.Target = r.Target
+				n++
+			}
+		}
+		before := len(r.Learned)
+		r.Learned = dedupFamilies(r.Learned)
+		n += before - len(r.Learned)
+	}
+	before := len(p.ChildAnswers)
+	p.ChildAnswers = dedupFamilies(p.ChildAnswers)
+	n += before - len(p.ChildAnswers)
+	return n
+}
+
+// dedupFamilies keeps the last entry of every family, in original order.
+func dedupFamilies(in []Learned) []Learned {
+	last := map[string]int{}
+	for i, l := range in {
+		last[l.RuleID+"#"+l.Match.Family()] = i
+	}
+	out := in[:0]
+	for i, l := range in {
+		if last[l.RuleID+"#"+l.Match.Family()] == i {
+			out = append(out, l)
+		}
+	}
+	return out
+}

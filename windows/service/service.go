@@ -65,6 +65,10 @@ type Service struct {
 	asks       map[string]pendingAsk
 	askedPaths map[string]time.Time
 	watchStop  context.CancelFunc
+	written    map[string]string // rule-set file -> content last written
+	healTimer  *time.Timer
+	misrouted  map[string]time.Time // process path -> when its misrouted connections were closed
+	lastHeal   time.Time            // last engine restart by the reconciler
 	listener   net.Listener
 }
 
@@ -135,13 +139,20 @@ func New(dataDir string, console bool) (*Service, error) {
 		return nil, err
 	}
 	s.store = st
-	var pruned int
+	var pruned, repaired int
 	_ = st.Update(func(p *model.Profile, _ *[]model.Server) error {
 		pruned = model.PruneSharedLearned(p)
+		repaired = model.RepairChildren(p)
+		if pruned+repaired == 0 {
+			return errUnchanged
+		}
 		return nil
 	})
 	if pruned > 0 {
 		s.log.Info("removed auto-learned shared programs from app rules", "count", pruned)
+	}
+	if repaired > 0 {
+		s.log.Info("repaired learned children (stale routes, duplicate versions)", "count", repaired)
 	}
 	s.resolver = newResolver(s.log)
 	var sec [16]byte
@@ -173,7 +184,10 @@ func (s *Service) Run(ctx context.Context) error {
 	}, s.log)
 	defer s.sup.Shutdown()
 
-	mon, err := netmon.Start(func(reason string) { s.sup.NetworkChanged(reason) }, s.isTunLUID)
+	mon, err := netmon.Start(func(reason string) {
+		s.sup.NetworkChanged(reason)
+		s.reconcileSoon(healAfterNet)
+	}, s.isTunLUID)
 	if err != nil {
 		s.log.Warn("network monitor unavailable", "err", err)
 	} else {
@@ -201,6 +215,10 @@ func (s *Service) Run(ctx context.Context) error {
 	// undo what a crash or reboot left while connected
 	s.applyPrivacy(false)
 
+	healCtx, stopHeal := context.WithCancel(ctx)
+	defer stopHeal()
+	go s.healLoop(healCtx)
+
 	prof, _ := s.store.Snapshot()
 	if prof.ConnectOnStart || s.wasConnected() {
 		if err := s.sup.Connect(); err != nil {
@@ -221,6 +239,7 @@ func (s *Service) Run(ctx context.Context) error {
 func (s *Service) Resume() {
 	if s.sup != nil {
 		s.sup.NetworkChanged("resume")
+		s.reconcileSoon(healAfterNet)
 	}
 }
 
@@ -287,9 +306,20 @@ func (s *Service) build() (*configgen.Output, error) {
 }
 
 func (s *Service) write(out *configgen.Output, onlyRuleSets bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.written == nil {
+		s.written = map[string]string{}
+	}
 	for name, data := range out.RuleSets {
-		if err := store.WriteFileAtomic(filepath.Join(s.rulesDir, name), data); err != nil {
-			return err
+		// Unchanged files are not rewritten: every write makes the engine
+		// reload that file, and a burst of reloads is what races with writes.
+		if !onlyRuleSets || s.written[name] != string(data) {
+			if err := store.WriteFileAtomic(filepath.Join(s.rulesDir, name), data); err != nil {
+				delete(s.written, name)
+				return err
+			}
+			s.written[name] = string(data)
 		}
 	}
 	if onlyRuleSets {
@@ -457,9 +487,25 @@ func (s *Service) onProcStart(ev procs.StartEvent) {
 	case proctree.ActLearn:
 		s.log.Info("child learned", "parent", ev.Parent.Path, "child", ev.Child.Path, "target", d.Target)
 		s.learn(d.RuleID, model.Learned{Match: d.Child, Target: d.Target, Source: "inherit"})
+	case proctree.ActUpdate:
+		s.log.Info("child updated to a new path", "parent", ev.Parent.Path, "child", ev.Child.Path)
+		if d.Answer {
+			s.updateAnswer(d.RuleID, d.Child)
+		} else {
+			s.learn(d.RuleID, model.Learned{Match: d.Child, Target: d.Target, Source: "inherit"})
+		}
 	case proctree.ActAsk:
-		key := d.Child.Key()
+		// One question per program and app: a new version or another temp
+		// copy of the same installer does not ask again, and an unanswered
+		// question is not repeated.
+		key := d.RuleID + "#" + d.Child.Family()
 		s.mu.Lock()
+		for _, a := range s.asks {
+			if a.RuleID+"#"+a.Child.Family() == key {
+				s.mu.Unlock()
+				return
+			}
+		}
 		if t, ok := s.askedPaths[key]; ok && time.Since(t) < 10*time.Minute {
 			s.mu.Unlock()
 			return
@@ -475,27 +521,67 @@ func (s *Service) onProcStart(ev procs.StartEvent) {
 	}
 }
 
+// learn adds a child to an app rule. A child of the same family (another
+// version or temp copy of the same program) replaces the older path instead
+// of adding one more entry.
 func (s *Service) learn(ruleID string, l model.Learned) {
 	err := s.store.Update(func(p *model.Profile, _ *[]model.Server) error {
 		for i := range p.Rules {
-			if p.Rules[i].ID == ruleID {
-				for _, ex := range p.Rules[i].Learned {
-					if ex.Match.Key() == l.Match.Key() {
-						return nil
-					}
-				}
-				p.Rules[i].Learned = append(p.Rules[i].Learned, l)
-				return nil
+			if p.Rules[i].ID != ruleID {
+				continue
 			}
+			fam := l.Match.Family()
+			for j, ex := range p.Rules[i].Learned {
+				if ex.Match.Key() == l.Match.Key() {
+					return errUnchanged
+				}
+				if ex.Match.Family() == fam {
+					p.Rules[i].Learned[j].Match = l.Match
+					p.Rules[i].Learned[j].Target = l.Target
+					return nil
+				}
+			}
+			p.Rules[i].Learned = append(p.Rules[i].Learned, l)
+			return nil
 		}
 		return fmt.Errorf("rule %s not found", ruleID)
 	})
+	if errors.Is(err, errUnchanged) {
+		return
+	}
 	if err != nil {
 		s.log.Warn("learn child", "err", err)
 		return
 	}
 	s.afterChange()
 }
+
+// updateAnswer moves a saved "always direct" answer to a new path of the same program.
+func (s *Service) updateAnswer(ruleID string, m model.Match) {
+	err := s.store.Update(func(p *model.Profile, _ *[]model.Server) error {
+		fam := m.Family()
+		for i, a := range p.ChildAnswers {
+			if a.Match.Family() == fam && (a.RuleID == "" || a.RuleID == ruleID) {
+				if a.Match.Key() == m.Key() {
+					return errUnchanged
+				}
+				p.ChildAnswers[i].Match = m
+				return nil
+			}
+		}
+		return errUnchanged
+	})
+	if errors.Is(err, errUnchanged) {
+		return
+	}
+	if err != nil {
+		s.log.Warn("update child answer", "err", err)
+		return
+	}
+	s.afterChange()
+}
+
+var errUnchanged = errors.New("unchanged")
 
 // afterChange applies a store change to the running engine and tells clients.
 func (s *Service) afterChange() {
@@ -504,6 +590,7 @@ func (s *Service) afterChange() {
 	}
 	if s.sup.Engine() != nil {
 		s.applyFirewall(true, nil)
+		s.reconcileSoon(healAfterApply)
 	}
 	s.privacyAfterChange()
 	s.rpc.Notify(rpcapi.NDataChanged, map[string]any{})

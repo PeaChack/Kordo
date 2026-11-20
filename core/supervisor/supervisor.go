@@ -369,12 +369,15 @@ func (s *Supervisor) Apply() (restarted bool, err error) {
 		return false, err
 	}
 	if configgen.OnlyRuleSetsChanged(s.current, out) {
-		if err := s.hooks.Write(out, true); err != nil {
-			return false, err
+		err := s.hooks.Write(out, true)
+		if err == nil {
+			s.current = out
+			s.log.Info("rule-sets hot-reloaded", "summary", configgen.Describe(out))
+			return false, nil
 		}
-		s.current = out
-		s.log.Info("rule-sets hot-reloaded", "summary", configgen.Describe(out))
-		return false, nil
+		// A half-written set of rules would keep routing by the old ones
+		// until the next restart; restart now so the engine reads them all.
+		s.log.Warn("rule-set hot reload failed, restarting the engine", "err", err)
 	}
 	s.stopEngineLocked()
 	s.backoff = 0

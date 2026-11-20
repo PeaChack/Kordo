@@ -110,8 +110,11 @@ func Watch(ctx context.Context, interval time.Duration, onStart func(StartEvent)
 					if !ok {
 						parent, ok = known[p.PPID] // parent already exited
 					}
+					// Both start times must be known: a parent PID may have been
+					// reused by an unrelated (possibly routed) process, and only
+					// "parent started before child" rules that out.
 					if ok && p.Path != "" && parent.Path != "" &&
-						(parent.Created == 0 || p.Created == 0 || parent.Created <= p.Created) {
+						parent.Created != 0 && p.Created != 0 && parent.Created <= p.Created {
 						onStart(StartEvent{Child: p, Parent: parent})
 					}
 				}

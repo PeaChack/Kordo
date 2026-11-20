@@ -39,6 +39,10 @@ const Mock = (() => {
         case 'logs.tail': return 'time=2026-10-30T12:00:00 level=INFO msg="kordo service starting"';
         case 'rules.upsert': { const r = Object.assign({ id: 'r' + Date.now() }, params); const i = st.rules.findIndex(x => x.id === r.id); i >= 0 ? st.rules[i] = r : st.rules.push(r); return r; }
         case 'rules.remove': st.rules = st.rules.filter(r => r.id !== params.id); return true;
+        case 'children.clear':
+          st.rules.forEach(r => { if (!params.ruleId || r.id === params.ruleId) r.learned = []; });
+          st.profile.childAnswers = (st.profile.childAnswers || []).filter(a => params.ruleId && a.ruleId !== params.ruleId);
+          return true;
         case 'profile.set': st.profile = params.profile; return true;
         case 'killswitch.set': st.profile.killSwitch = params.mode; return st.status;
         case 'servers.test': return { tcpMs: 31, httpMs: 120, via: 'running engine' };
@@ -495,13 +499,14 @@ function renderApps(main) {
   const tabs = [['all', 'Все'], ...S.servers.map(s => ['s:' + s.id, s.name]), ['direct', 'Напрямую'], ['block', 'Блокировать']];
   if (!tabs.some(t => t[0] === S.appsTab)) S.appsTab = 'all';
   const def = S.profile ? S.profile.defaultTarget : { kind: 'direct' };
+  const anyKids = S.rules.some(r => (r.learned || []).length) || ((S.profile && S.profile.childAnswers) || []).length > 0;
   const asks = S.asks.map(a => `<div class="ask-row"><span class="dot warn"></span><div style="min-width:0;flex:1"><b>${esc(base(a.parentPath))}</b> запустил <b>${esc(base(a.childPath))}</b>
       ${a.shared ? '<span class="tag">общая программа</span>' : ''}<div class="path">${esc(a.childPath)}</div></div>
       <button class="btn sm" data-ans="${esc(a.askId)}" data-c="direct">Напрямую</button>
       <button class="btn sm primary" data-ans="${esc(a.askId)}" data-c="parent">Как родитель</button></div>`).join('');
   main.innerHTML = `
     <div class="row"><div><h1>Приложения</h1><p class="sub">Остальные приложения: <b>${esc(targetLabel(def))}</b>
-      <a class="link small" id="to-settings">изменить</a></p></div><span class="spacer"></span>
+      <a class="link small" id="to-settings">изменить</a>${anyKids ? ' · <a class="link small" id="clear-all-kids" title="Забыть все решения о подпроцессах всех приложений">забыть все подпроцессы</a>' : ''}</p></div><span class="spacer"></span>
       <button class="btn primary" id="add-apps" ${S.servers.length ? '' : 'disabled title="Сначала добавьте сервер"'}>+ Добавить</button></div>
     ${asks ? `<div class="card" style="margin-bottom:14px"><h3>Ждут решения</h3>${asks}</div>` : ''}
     <div class="row" style="margin-bottom:12px">
@@ -511,6 +516,7 @@ function renderApps(main) {
     <div class="dropzone" id="dropzone">Перетащите сюда .exe или ярлык</div>`;
   drawRuleList();
   $('#to-settings').onclick = () => go('settings');
+  if ($('#clear-all-kids')) $('#clear-all-kids').onclick = () => clearChildren('');
   $('#add-apps').onclick = () => showAppPicker();
   $$('[data-apptab]').forEach(a => a.onclick = () => { S.appsTab = a.dataset.apptab; render(); });
   $('#apps-filter').oninput = (e) => { S.appsFilter = e.target.value; drawRuleList(); };
@@ -535,7 +541,7 @@ function drawRuleList() {
       <div style="min-width:0">
         <div class="name">${esc(ruleTitle(r))} ${r.match.kind !== 'path' ? `<span class="tag">${r.match.kind === 'name' ? 'по имени' : 'Store'}</span>` : ''}</div>
         <div class="path" title="${esc(r.match.value)}">${esc(r.match.value)}</div>
-        ${kids.length ? `<div class="learned">${kids.map(k => `<span class="chip" title="${esc(k.path)}">↳ ${esc(k.name)} <span class="muted">→</span><select class="chip-sel" title="Куда направить ${esc(k.name)}" data-kid-kind="${k.kind}" data-rule="${esc(k.ruleId)}" data-i="${k.kind === 'learned' ? k.i : k.ai}">${targetOptions(k.tkey)}</select><button title="Забыть" ${k.kind === 'learned' ? `data-unlearn="${esc(k.ruleId)}" data-i="${k.i}"` : `data-forget="${esc(k.key)}"`}>×</button></span>`).join('')}</div>` : ''}
+        ${kids.length ? `<div class="learned">${kids.map(k => `<span class="chip" title="${esc(k.path)}">↳ ${esc(k.name)} <span class="muted">→</span><select class="chip-sel" title="Куда направить ${esc(k.name)}" data-kid-kind="${k.kind}" data-rule="${esc(k.ruleId)}" data-i="${k.kind === 'learned' ? k.i : k.ai}">${targetOptions(k.tkey)}</select><button title="Забыть" ${k.kind === 'learned' ? `data-unlearn="${esc(k.ruleId)}" data-i="${k.i}"` : `data-forget="${esc(k.key)}"`}>×</button></span>`).join('')}${kids.length > 1 ? `<button class="chip chip-clear" data-clear-kids="${esc(r.id)}" title="Забыть все решения о подпроцессах этого приложения">Забыть все</button>` : ''}</div>` : ''}
       </div>
       <select data-target="${esc(r.id)}">${targetOptions(targetKey(r.target))}</select>
       <select data-children="${esc(r.id)}" title="Что делать с программами, которые запускает это приложение">
@@ -551,6 +557,7 @@ function drawRuleList() {
     const r = S.rules.find(r => r.id === b.dataset.unlearn);
     updateRule(r.id, { learned: r.learned.filter((_, i) => i !== +b.dataset.i) });
   });
+  $$('[data-clear-kids]', box).forEach(b => b.onclick = () => clearChildren(b.dataset.clearKids));
   $$('[data-forget]', box).forEach(b => b.onclick = async () => { await guard(() => rpc('children.forget', { key: b.dataset.forget })).catch(() => { }); loadAll(); });
   // Changing a child's route: learned children are edited in place; a
   // "direct" answer becomes a learned child of the app with the new route.
@@ -569,6 +576,16 @@ function drawRuleList() {
     } catch (e) { toast(String(e.message || e), 'bad'); }
     loadAll();
   });
+}
+
+// clearChildren forgets every child decision of one app, or of all apps
+// when ruleId is empty. Their children are then asked about or learned again.
+async function clearChildren(ruleId) {
+  const r = ruleId && S.rules.find(r => r.id === ruleId);
+  const what = r ? `для «${ruleTitle(r)}»` : 'для всех приложений';
+  if (!confirm(`Забыть все решения о подпроцессах ${what}?`)) return;
+  await guard(() => rpc('children.clear', { ruleId: ruleId || '' })).catch(() => { });
+  loadAll();
 }
 
 async function updateRule(id, patch) {

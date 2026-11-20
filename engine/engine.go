@@ -186,6 +186,12 @@ func (i *Instance) Connections(ctx context.Context) ([]Connection, error) {
 	return v.Connections, nil
 }
 
+// CloseConnection closes one connection by its Clash API id.
+func (i *Instance) CloseConnection(ctx context.Context, id string) error {
+	_, err := i.clash(ctx, http.MethodDelete, "/connections/"+url.PathEscape(id))
+	return err
+}
+
 // CloseConnections closes the connections routed via tag, or all of them
 // when tag is empty.
 func (i *Instance) CloseConnections(ctx context.Context, tag string) error {

@@ -18,6 +18,9 @@ const (
 	ActNone  Action = "none"
 	ActLearn Action = "learn" // add child to rule.Learned
 	ActAsk   Action = "ask"   // ask the user
+	// ActUpdate: the child is a new version of an already decided program
+	// (same family); its saved decision is moved to the new path.
+	ActUpdate Action = "update"
 )
 
 type Decision struct {
@@ -26,6 +29,7 @@ type Decision struct {
 	Child  model.Match
 	Target model.Target // for learn: where the child goes
 	Shared bool         // child is a shared executable (cmd, node, ...)
+	Answer bool         // for update: the decision is a ChildAnswers entry, not a learned child
 }
 
 type Matcher struct {
@@ -91,6 +95,31 @@ func exe(path string) string {
 	return strings.ToLower(path)
 }
 
+// sameApp reports whether child belongs to the routed application itself:
+// it lives in the folder of the parent process or of the rule's app, or it is
+// a one-shot program unpacked into a temp folder. Anything else is a separate
+// program (a browser opened from a link, a game started by a launcher) and is
+// not tunnelled silently: routing it by path would route every later use of it.
+func sameApp(rule *model.AppRule, parentPath, childPath string) bool {
+	if model.IsTempPath(childPath) {
+		return true
+	}
+	c := strings.ToLower(model.Match{Kind: model.MatchPath, Value: childPath}.Normalize().Value)
+	roots := []string{model.AppRoot(parentPath)}
+	switch rule.Match.Kind {
+	case model.MatchPath:
+		roots = append(roots, model.AppRoot(rule.Match.Value))
+	case model.MatchStorePackage:
+		roots = append(roots, `\windowsapps\`+strings.ToLower(rule.Match.Value)+"_")
+	}
+	for _, r := range roots {
+		if r != "" && strings.Contains(c, r) {
+			return true
+		}
+	}
+	return false
+}
+
 // Decide applies the parent's child policy to a newly started child.
 func (m *Matcher) Decide(p model.Profile, parentPath, childPath string) Decision {
 	none := Decision{Action: ActNone}
@@ -110,9 +139,24 @@ func (m *Matcher) Decide(p model.Profile, parentPath, childPath string) Decision
 	}
 	shared := model.SharedExes[exe(childPath)]
 	d := Decision{RuleID: rule.ID, Child: child, Shared: shared}
+	// A new version of a program already decided on: keep that decision
+	// instead of adding (or asking about) one more entry per update.
+	fam := child.Family()
+	for _, l := range rule.Learned {
+		if l.Match.Family() == fam {
+			d.Action, d.Target = ActUpdate, l.Target
+			return d
+		}
+	}
+	for _, a := range p.ChildAnswers {
+		if a.Match.Family() == fam && (a.RuleID == "" || a.RuleID == rule.ID) {
+			d.Action, d.Target, d.Answer = ActUpdate, a.Target, true
+			return d
+		}
+	}
 	switch rule.Children {
 	case model.ChildInherit, "":
-		if shared {
+		if shared || !sameApp(rule, parentPath, childPath) {
 			d.Action = ActAsk
 			return d
 		}

@@ -178,3 +178,5 @@ details.card[open] summary { margin-bottom: 6px; }
 
 .update-box { padding: 10px; border-radius: 10px; border: 1px solid rgba(31,107,255,.45); background: rgba(31,107,255,.08); margin-bottom: 10px; font-size: 13px; }
 .update-box .row { gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.chip-clear { cursor: pointer; padding: 1px 8px; color: var(--muted); font: inherit; font-size: 11px; }
+.chip-clear:hover { color: var(--bad, #e5484d); border-color: currentColor; }

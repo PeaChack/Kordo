@@ -34,6 +34,7 @@ const (
 	MLogsTail        = "logs.tail"
 	MChildrenAnswer  = "children.answer"
 	MChildrenForget  = "children.forget"
+	MChildrenClear   = "children.clear" // {ruleId}: forget all child decisions of an app; empty = of all apps
 	MActivity        = "activity.list"
 	MDiagnostics     = "diagnostics.collect"
 )

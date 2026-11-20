@@ -261,10 +261,19 @@ func (s *Service) handle(ctx context.Context, c *rpcapi.Conn, method string, par
 			return nil, err
 		}
 		s.mu.Lock()
-		delete(s.askedPaths, req.Key)
+		s.askedPaths = map[string]time.Time{}
 		s.mu.Unlock()
 		s.afterChange()
 		return true, nil
+
+	case rpcapi.MChildrenClear:
+		req, err := decode[struct {
+			RuleID string `json:"ruleId"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+		return true, s.clearChildren(req.RuleID)
 
 	case rpcapi.MChildrenAnswer:
 		req, err := decode[rpcapi.ChildAnswer](params)
@@ -402,6 +411,9 @@ func (s *Service) upsertRule(r model.AppRule) (model.AppRule, error) {
 				if r.Learned == nil {
 					r.Learned = p.Rules[i].Learned
 				}
+				// children routed like the app move with it; otherwise moving
+				// an app to "direct" would leave its children in the tunnel
+				model.RetargetChildren(&r, p.Rules[i].Target)
 				p.Rules[i] = r
 				return nil
 			}
@@ -413,6 +425,39 @@ func (s *Service) upsertRule(r model.AppRule) (model.AppRule, error) {
 	}
 	s.afterChange()
 	return r, nil
+}
+
+// clearChildren forgets every child decision of one app (ruleID) or of all
+// apps (empty ruleID): learned children, "direct" answers and open questions.
+func (s *Service) clearChildren(ruleID string) error {
+	err := s.store.Update(func(p *model.Profile, _ *[]model.Server) error {
+		for i := range p.Rules {
+			if ruleID == "" || p.Rules[i].ID == ruleID {
+				p.Rules[i].Learned = nil
+			}
+		}
+		out := p.ChildAnswers[:0]
+		for _, a := range p.ChildAnswers {
+			if ruleID != "" && a.RuleID != ruleID {
+				out = append(out, a)
+			}
+		}
+		p.ChildAnswers = out
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.askedPaths = map[string]time.Time{}
+	for id, a := range s.asks {
+		if ruleID == "" || a.RuleID == ruleID {
+			delete(s.asks, id)
+		}
+	}
+	s.mu.Unlock()
+	s.afterChange()
+	return nil
 }
 
 func (s *Service) answerChild(req rpcapi.ChildAnswer) (bool, error) {

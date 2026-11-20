@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/PeaChack/Kordo/core/model"
 )
@@ -111,11 +112,17 @@ func WriteFileAtomic(path string, data []byte) error {
 		os.Remove(name)
 		return err
 	}
-	if err := os.Rename(name, path); err != nil {
-		os.Remove(name)
-		return err
+	// The target may be open for a moment (the engine reloading the previous
+	// version, an antivirus scan); Windows then refuses the replace, so retry.
+	var rerr error
+	for i := 0; i < 20; i++ {
+		if rerr = os.Rename(name, path); rerr == nil {
+			return nil
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
-	return nil
+	os.Remove(name)
+	return rerr
 }
 
 func NewID() string {

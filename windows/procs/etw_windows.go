@@ -178,9 +178,11 @@ var etwCallback = syscall.NewCallback(func(rec *etwEventRecord) uintptr {
 		etwStats.noParent.Add(1)
 		return 0
 	}
-	if parent.Created != 0 && child.Created != 0 && parent.Created > child.Created {
+	// Both start times must be known: only "parent started before child"
+	// rules out a PID reused by an unrelated (possibly routed) process.
+	if parent.Created == 0 || child.Created == 0 || parent.Created > child.Created {
 		etwStats.noParent.Add(1)
-		return 0 // PID reused by a newer process: not the real parent
+		return 0 // PID reused by a newer process, or cannot tell
 	}
 	etwStats.emitted.Add(1)
 	go cb(StartEvent{Child: child, Parent: parent})
